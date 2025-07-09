@@ -1,0 +1,37 @@
+_format_version: "3.0"
+
+services:
+  - name: identity-service
+    url: http://identity-service:3001
+    routes:
+      - name: auth-route
+        paths:
+          - /auth
+
+  - name: analytics-service
+    url: http://analytics-service:3000
+    routes:
+      - name: analytics-route
+        paths:
+          - /analytics
+
+  - name: messaging-service
+    url: http://messaging-service:3003
+    routes:
+      - name: messaging-route
+        paths:
+          - /messages
+
+  - name: payment-service
+    url: http://payment-service:3005
+    routes:
+      - name: payment-route
+        paths:
+          - /payments
+
+  - name: order-service
+    url: http://order-service:3004
+    routes:
+      - name: order-route
+        paths:
+          - /orders
