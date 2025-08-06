@@ -8,8 +8,6 @@
  * - Express with security (helmet, cors), rate limiting (rate-limiter-flexible + rate-limit-redis)
  * - MongoDB connection via Mongoose
  * - Redis for rate limiting and Socket.IO scaling
- * - Kafka producer & consumer integration
- * - Socket.IO server with Redis streams adapter for horizontal scaling
  * - Routes for auth and messaging APIs
  * - Graceful shutdown on SIGINT / SIGTERM
  *
@@ -40,6 +38,9 @@ import { connectDB, disconnectDB } from "./configs/mongodb.config.js";
 import logger from "./utils/logger.js";
 
 // Routers
+import userAuthRouter from "./routes/user-auth.routes.js";
+import userProfileRouter from "./routes/user-profile.routes.js";
+import vendorProfileRouter from "./routes/vendor-profile.routes.js";
 
 // Configs
 await connectDB();
@@ -157,21 +158,6 @@ app.use((req, res, next) => {
   next();
 });
 
-/**
- * @socketio Initialization & Broadcasting
- *
- * - Creates Socket.IO server instance attached to HTTP server with Redis adapter
- *   for pub/sub scaling across multiple server instances.
- * - Configures CORS to only allow requests from specified origins with selected HTTP methods.
- * - Sets heartbeat options with `pingInterval` and `pingTimeout` to keep connections alive.
- * - `allowEIO3` ensures backward compatibility with older Socket.IO v3 clients.
- *
- * After initialization:
- * - Logs whether Socket.IO was successfully started.
- * - Calls `socketIOBroadcastor()` to begin broadcasting user connections and
- *   handling incoming socket events (defined in socket.config.js).
- */
-
 if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
 }
@@ -219,25 +205,25 @@ const authLimiter = new RateLimiterRedis({
   blockDuration: 60 * 15, // Block for 15 min if limit is exceeded
 });
 
-app.use("/api/v1/auth", async (req, res, next) => {
-  try {
-    if (req.path === "/check-auth") {
-      return next();
-    }
-    await authLimiter
-      .consume(req.ip)
-      .then(() => next())
-      .catch(() => {
-        logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
-        res.status(429).json({ success: false, message: "Too many requests" });
-      });
-  } catch (rejRes) {
-    res.status(429).json({
-      message:
-        "Too many login/signup attempts. Please try again after 15 minutes.",
-    });
-  }
-});
+// app.use("/api/v1/auth", async (req, res, next) => {
+//   try {
+//     if (req.path === "/check-auth") {
+//       return next();
+//     }
+//     await authLimiter
+//       .consume(req.ip)
+//       .then(() => next())
+//       .catch(() => {
+//         logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
+//         res.status(429).json({ success: false, message: "Too many requests" });
+//       });
+//   } catch (rejRes) {
+//     res.status(429).json({
+//       message:
+//         "Too many login/signup attempts. Please try again after 15 minutes.",
+//     });
+//   }
+// });
 
 /**
  * @ratelimiter Sensitive Endpoint Limiter
@@ -298,6 +284,10 @@ app.get("/metrics", async (req, res) => {
   const serverMeterics = await client.register.metrics();
   res.send(serverMeterics);
 });
+
+app.use("/user", userAuthRouter);
+// app.use("/user-profile", userProfileRouter);
+// app.use("/vendor-profile", vendorProfileRouter);
 
 /**
  * @mainserver Server Startup & Graceful Shutdown
