@@ -6,7 +6,7 @@ pipeline {
     DOCKERHUB_CRED_ID  = "DOCKERHUB_LOGIN" 
     SERVICES = "micro-services-payment-service micro-services-analytics-service micro-services-order-service micro-services-catalog-service micro-services-messaging-service micro-services-identity-service"
     BASE_DIR = "micro-services" 
-    TARGET_BRANCH = "main"
+    TARGET_BRANCH = "master"
   }
 
   stages {
