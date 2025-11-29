@@ -19,6 +19,7 @@ const colorMap = {
   "Kafka Server": chalk.magenta.bold,
   "Socket.io Server": chalk.cyan.bold,
   "MongoDb Server": chalk.green.bold,
+  "Redis Server": chalk.red.bold,
   CLOUDINARY: chalk.blue.bold,
   Server: chalk.yellowBright.bold,
 };
@@ -64,5 +65,18 @@ export const kafkaLogger = loggerInstance.child({
 export const mongodbLogger = loggerInstance.child({
   server_name: "MongoDb Server",
 });
+
+  export const redisLogger = loggerInstance.child({
+    server_name: "Redis Server",
+  });
+
+export const socketLogger = loggerInstance.child({
+  server_name: "Socket.io Server",
+});
+
+export const cloudinaryLogger = loggerInstance.child({
+  server_name: "CLOUDINARY",
+});
+
 const logger = loggerInstance.child({ server_name: "Server" });
 export default logger;

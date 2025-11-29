@@ -35,7 +35,7 @@ import { fileURLToPath } from "url";
 
 // Connections & Configurations
 import { connectDB, disconnectDB } from "./configs/mongodb.config.js";
-import logger from "./utils/logger.js";
+import logger, { redisLogger } from "./utils/logger.js";
 
 // Routers
 import userAuthRouter from "./routes/user-auth.routes.js";
@@ -49,33 +49,33 @@ await connectDB();
 const app = express();
 const SERVER_PORT = process.env.SERVER_PORT;
 const server = http.createServer(app);
-const redisClient = new Redis(process.env.REDIS_URL);
-const allowedOrigins = ["http://localhost:5173", "http://localhost:9090"];
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const collectDefaultMetrics = client.collectDefaultMetrics;
-collectDefaultMetrics({ register: client.register });
 
-const httpRequestDurationSeconds = new client.Histogram({
-  name: "http_request_duration_seconds",
-  help: "Duration of HTTP requests in seconds",
-  labelNames: ["method", "route", "code"],
-  buckets: [0.05, 0.1, 0.2, 0.5, 1, 2, 5], // match your Apdex target/tolerated
-});
+// CORS Whitelist
+const allowedOrigins = ["http://localhost:5173", "http://localhost:9090"];
 
-const responseSizeBytes = new client.Counter({
-  name: "http_response_size_bytes",
-  help: "Total size of HTTP responses sent in bytes",
-  labelNames: ["method", "route", "code"],
-});
+// Create Redis client if REDIS_URL provided
+let redisClient = null;
+try {
+  if (process.env.REDIS_URL) {
+    redisClient = new Redis(process.env.REDIS_URL);
+  }
+} catch (err) {
+  redisLogger.error(
+    `Redis client connection failed on ${process.env.REDIS_URL} , [ Enviroment : Docker ] - ${err.message}`
+  );
+}
 
-!redisClient
-  ? logger.error(
-      `Redis client connection failed on ${process.env.REDIS_URL} , [ Enviroment : Docker ]`
-    )
-  : logger.info(
-      `Redis client connected successfully on ${process.env.REDIS_URL} , [ Enviroment : Docker ]`
-    );
+if (!redisClient) {
+  redisLogger.warn(
+    `Redis client not available. Rate limiters that depend on Redis will be disabled.`
+  );
+} else {
+  redisLogger.info(
+    `Redis client connected successfully on ${process.env.REDIS_URL} , [ Enviroment : Docker ]`
+  );
+}
 
 /**
  * @middleware Parsing & Security
@@ -85,6 +85,7 @@ const responseSizeBytes = new client.Counter({
  * - cookieParser(): Reads cookies from incoming requests.
  * - helmet(): Secures HTTP headers and enables cross-origin resource policy.
  */
+
 app.use(express.json());
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true }));
@@ -120,44 +121,6 @@ app.use(
   })
 );
 
-app.use((req, res, next) => {
-  const end = httpRequestDurationSeconds.startTimer();
-  res.on("finish", () => {
-    end({
-      method: req.method,
-      route: req.route?.path || req.path,
-      code: res.statusCode,
-    });
-  });
-  next();
-});
-
-app.use((req, res, next) => {
-  const oldWrite = res.write;
-  const oldEnd = res.end;
-  let bytes = 0;
-
-  res.write = (...args) => {
-    if (args[0]) bytes += Buffer.byteLength(args[0]);
-    return oldWrite.apply(res, args);
-  };
-
-  res.end = (...args) => {
-    if (args[0]) bytes += Buffer.byteLength(args[0]);
-    responseSizeBytes.inc(
-      {
-        method: req.method,
-        route: req.route?.path || req.path,
-        code: res.statusCode,
-      },
-      bytes
-    );
-    return oldEnd.apply(res, args);
-  };
-
-  next();
-});
-
 if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
 }
@@ -171,15 +134,25 @@ if (process.env.NODE_ENV === "production") {
  * Protects the API from excessive requests across all routes.
  */
 
-const rateLimiter = new RateLimiterRedis({
-  storeClient: redisClient,
-  keyPrefix: "middleware",
-  points: 100, // 100 requests
-  duration: 30, // 10 requests
-  blockDuration: 15, // Block for 15 min if limit is exceeded
-});
+// Rate limiters (only if Redis is available)
+let rateLimiter = null;
+if (redisClient) {
+  try {
+    rateLimiter = new RateLimiterRedis({
+      storeClient: redisClient,
+      keyPrefix: "middleware",
+      points: 100, // 100 requests
+      duration: 30, // 30 seconds
+      blockDuration: 15 * 60, // Block for 15 min if limit is exceeded
+    });
+  } catch (error) {
+    logger.warn("Failed to create rate limiter:", error.message);
+  }
+}
 
 app.use((req, res, next) => {
+  if (!rateLimiter) return next();
+
   rateLimiter
     .consume(req.ip)
     .then(() => next())
@@ -197,33 +170,39 @@ app.use((req, res, next) => {
  *
  */
 
-const authLimiter = new RateLimiterRedis({
-  storeClient: redisClient,
-  keyPrefix: "auth_fail_limiter",
-  points: 10, // 10 requests
-  duration: 60 * 15, // Per 15 minutes
-  blockDuration: 60 * 15, // Block for 15 min if limit is exceeded
-});
+let authLimiter = null;
+const noAuthLimiterRoutes = ["/check-auth", "/refresh-token"];
 
-// app.use("/api/v1/auth", async (req, res, next) => {
-//   try {
-//     if (req.path === "/check-auth") {
-//       return next();
-//     }
-//     await authLimiter
-//       .consume(req.ip)
-//       .then(() => next())
-//       .catch(() => {
-//         logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
-//         res.status(429).json({ success: false, message: "Too many requests" });
-//       });
-//   } catch (rejRes) {
-//     res.status(429).json({
-//       message:
-//         "Too many login/signup attempts. Please try again after 15 minutes.",
-//     });
-//   }
-// });
+if (redisClient) {
+  try {
+    authLimiter = new RateLimiterRedis({
+      storeClient: redisClient,
+      keyPrefix: "auth_fail_limiter",
+      points: 10, // 10 requests
+      duration: 60 * 15, // Per 15 minutes
+      blockDuration: 60 * 15, // Block for 15 min if limit is exceeded
+    });
+  } catch (error) {
+    logger.warn("Failed to create auth limiter:", error.message);
+  }
+}
+
+app.use("/api/v1/auth", async (req, res, next) => {
+  try {
+    if (noAuthLimiterRoutes.includes(req.path)) {
+      return next();
+    }
+    if (authLimiter) {
+      await authLimiter.consume(req.ip);
+    }
+    next();
+  } catch (rejRes) {
+    res.status(429).json({
+      message:
+        "Too many login/signup attempts. Please try again after 15 minutes.",
+    });
+  }
+});
 
 /**
  * @ratelimiter Sensitive Endpoint Limiter
@@ -232,21 +211,28 @@ const authLimiter = new RateLimiterRedis({
  * like password reset or account deletion.
  */
 
-const sensitiveEndpointsLimiter = rateLimit({
-  windowMs: 30 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.ip,
-  handler: (req, res) => {
-    logger.warn(`Sensitive endpoint rate limit exceeded for IP: ${req.ip}`);
-    res.status(429).json({ success: false, message: "Too many requests" });
-  },
-  store: new RedisStore({
-    sendCommand: (...args) => redisClient.call(...args),
-    skipFailedRequests: true,
-  }),
-});
+let sensitiveEndpointsLimiter = null;
+if (redisClient) {
+  try {
+    sensitiveEndpointsLimiter = rateLimit({
+      windowMs: 30 * 1000,
+      max: 10,
+      standardHeaders: true,
+      legacyHeaders: false,
+      keyGenerator: (req) => req.ip,
+      handler: (req, res) => {
+        logger.warn(`Sensitive endpoint rate limit exceeded for IP: ${req.ip}`);
+        res.status(429).json({ success: false, message: "Too many requests" });
+      },
+      store: new RedisStore({
+        sendCommand: (...args) => redisClient.call(...args),
+        skipFailedRequests: true,
+      }),
+    });
+  } catch (error) {
+    logger.warn("Failed to create sensitive endpoints limiter:", error.message);
+  }
+}
 
 /**
  * @logger Request Logging
@@ -276,18 +262,24 @@ app.use((req, res, next) => {
  */
 
 app.get("/", (req, res) => {
-  res.send("Welcome to the API");
-});
-
-app.get("/metrics", async (req, res) => {
-  res.setHeader("Content-type", client.register.contentType);
-  const serverMeterics = await client.register.metrics();
-  res.send(serverMeterics);
+  res.send("Welcome to the Identity Service API Server!");
 });
 
 app.use("/user", userAuthRouter);
 // app.use("/user-profile", userProfileRouter);
 // app.use("/vendor-profile", vendorProfileRouter);
+
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Route not found",
+  });
+});
 
 /**
  * @mainserver Server Startup & Graceful Shutdown
