@@ -18,6 +18,8 @@ const VendorSingupScehma = z.object({
   password: z.string().min(6), 
 });
 
+
+
 export const schemas = {
   signUpSchema,
   loginSchema,
