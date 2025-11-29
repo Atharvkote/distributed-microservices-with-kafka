@@ -4,7 +4,7 @@ const app = express()
 const PORT = 3003
 
 app.get('/', (req, res) => {
-  res.send('Hello World msg!')
+  res.send('Welcome to Messaging Service API Server!')
 })
 
 app.use((req, res, next) => {
