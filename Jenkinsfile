@@ -1,14 +1,13 @@
-// Jenkinsfile for Multibranch Pipeline - builds only changed microservices and pushes on main/master
 pipeline {
-  agent { label 'docker-node' }   // change if your agent label is different
+  agent { label 'docker-node' }
   options { timestamps(); ansiColor('xterm'); skipDefaultCheckout(true) }
 
   environment {
-    DOCKERHUB_NAMESPACE = "atharvkote"          // your Docker Hub org/user
+    DOCKERHUB_NAMESPACE = "atharvkote"
     BASE_DIR = "micro-services"
     SERVICES = "analytics-service catalog-service identity-service messaging-service orders-service payment-service"
-    DOCKER_CRED_ID = "DOCKERHUB_LOGIN"         // Jenkins credential ID for Docker Hub (username+token)
-    PRIMARY_BRANCHES = "master"           // branches allowed to push images
+    DOCKER_CRED_ID = "DOCKERHUB_LOGIN"
+    PRIMARY_BRANCHES = "master"
   }
 
   stages {
@@ -21,33 +20,28 @@ pipeline {
     stage('Detect changes') {
       steps {
         script {
-          // get branch and PR info
           def branch = env.BRANCH_NAME ?: 'unknown'
           def isPR = env.CHANGE_ID ? true : false
           echo "Branch: ${branch}  |  IsPR: ${isPR}"
 
-          // Get short commit hash
           def shortCommit = powershell(returnStdout: true, script: 'git rev-parse --short=7 HEAD').trim()
           env.SHORT_COMMIT = shortCommit
           echo "Short commit: ${shortCommit}"
 
-          // Get changed files list (powershell) - prefer diff against origin/<branch>, fallback to HEAD^..HEAD, fallback to ls-files
-          def changedJson = powershell(returnStdout: true, script: '''
+          def changedJson = powershell(returnStdout: true, script: """
             Set-StrictMode -Off
-            $branch = "${env.BRANCH_NAME}"
-            if (-not $branch) { $branch = "main" }
-            try { git fetch origin $branch --depth=1 2>$null } catch {}
-            $diff = ""
-            try { $diff = git diff --name-only origin/$branch...HEAD 2>$null } catch {}
-            if ([string]::IsNullOrWhiteSpace($diff)) { $diff = git diff --name-only HEAD^ HEAD 2>$null }
-            if ([string]::IsNullOrWhiteSpace($diff)) { $diff = git ls-files }
-            $diff -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" } | Sort-Object -Unique | ConvertTo-Json
-          ''').trim()
+            \$branch = "${branch}"
+            try { git fetch origin \$branch --depth=1 2>\$null } catch {}
+            \$diff = ""
+            try { \$diff = git diff --name-only origin/\$branch...HEAD 2>\$null } catch {}
+            if ([string]::IsNullOrWhiteSpace(\$diff)) { \$diff = git diff --name-only HEAD^ HEAD 2>\$null }
+            if ([string]::IsNullOrWhiteSpace(\$diff)) { \$diff = git ls-files }
+            \$diff -split "`n" | ForEach-Object { \$_.Trim() } | Where-Object { \$_.Length -gt 0 } | Sort-Object -Unique | ConvertTo-Json
+          """).trim()
 
           def changedFiles = readJSON text: changedJson
           echo "Changed files: ${changedFiles}"
 
-          // Decide which services to build
           def services = env.SERVICES.split()
           def rebuildAllTriggers = ['docker-compose.yaml','docker-compose.yml','README.md','README.MD','README']
           def rebuildAll = false
@@ -85,7 +79,6 @@ pipeline {
             env.CHANGED_SERVICES = toBuild.join(',')
           }
 
-          // expose flags
           env.IS_PR = isPR.toString()
           env.CURRENT_BRANCH = branch
         }
@@ -93,10 +86,9 @@ pipeline {
     }
 
     stage('Docker Login (if needed)') {
-      when { expression { return (env.CHANGED_SERVICES && env.CHANGED_SERVICES.trim().length() > 0 && env.IS_PR == 'false' && env.PRIMARY_BRANCHES.tokenize().contains(env.CURRENT_BRANCH) } ) }
+      when { expression { return (env.CHANGED_SERVICES && env.CHANGED_SERVICES.trim().length() > 0 && env.IS_PR == 'false' && env.PRIMARY_BRANCHES.tokenize().contains(env.CURRENT_BRANCH)) } }
       steps {
         withCredentials([usernamePassword(credentialsId: env.DOCKER_CRED_ID, usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
-          // Windows: feed password to docker login
           bat 'echo %DH_PASS% | docker login -u %DH_USER% --password-stdin'
         }
       }
@@ -112,26 +104,22 @@ pipeline {
           for (svc in list) {
             def service = svc.trim()
             def tag = "${env.DOCKERHUB_NAMESPACE}/${service}:${env.SHORT_COMMIT}-${env.BUILD_NUMBER}"
-            def ctxWindows = "${env.BASE_DIR}\\${service}"        // windows path for agent
+            def ctxWindows = "${env.BASE_DIR}\\${service}"
             def tService = service
             def tTag = tag
             def tCtx = ctxWindows
 
             tasks[tService] = {
-              // run on same agent/node
-              node(env.NODE_NAME) {
-                stage("Build ${tService}") {
-                  echo "Building ${tTag} from ${tCtx}"
-                  bat "docker build -t ${tTag} ${tCtx}"
-                }
-                stage("Push ${tService}") {
-                  // push only for non-PR and only on allowed primary branches
-                  if (env.IS_PR == 'false' && env.PRIMARY_BRANCHES.tokenize().contains(env.CURRENT_BRANCH)) {
-                    echo "Pushing ${tTag}"
-                    bat "docker push ${tTag}"
-                  } else {
-                    echo "Skipping push for ${tService} (IS_PR=${env.IS_PR}, branch=${env.CURRENT_BRANCH})"
-                  }
+              stage("Build ${tService}") {
+                echo "Building ${tTag} from ${tCtx}"
+                bat "docker build -t ${tTag} ${tCtx}"
+              }
+              stage("Push ${tService}") {
+                if (env.IS_PR == 'false' && env.PRIMARY_BRANCHES.tokenize().contains(env.CURRENT_BRANCH)) {
+                  echo "Pushing ${tTag}"
+                  bat "docker push ${tTag}"
+                } else {
+                  echo "Skipping push for ${tService} (IS_PR=${env.IS_PR}, branch=${env.CURRENT_BRANCH})"
                 }
               }
             }
@@ -145,7 +133,7 @@ pipeline {
         }
       }
     }
-  } // stages
+  }
 
   post {
     always {
