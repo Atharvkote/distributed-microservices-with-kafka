@@ -166,7 +166,6 @@ app.use((req, res, next) => {
  */
 
 let authLimiter = null;
-const noAuthLimiterRoutes = ["/check-auth", "/refresh-token"];
 
 if (redisClient) {
   try {
