@@ -26,7 +26,7 @@ pipeline {
             def base = sh(script: "git rev-parse --verify origin/${target} >/dev/null 2>&1 && git merge-base origin/${target} HEAD || git merge-base master HEAD", returnStdout: true).trim()
             changedFilesRaw = sh(script: "git diff --name-only ${base}..HEAD || true", returnStdout: true).trim()
           } else {
-            bat 'powershell -NoProfile -Command "git fetch origin %TARGET_BRANCH%:%TARGET_BRANCH% -ErrorAction SilentlyContinue"'
+            bat 'powershell -NoProfile -Command "try { git fetch origin %TARGET_BRANCH%:%TARGET_BRANCH% } catch { }"'
             shortSha = bat(returnStdout: true, script: 'powershell -NoProfile -Command "(git rev-parse --short=7 HEAD).Trim()"').trim()
             def base = bat(returnStdout: true, script:
               'powershell -NoProfile -Command "try { git rev-parse --verify origin/%TARGET_BRANCH% > $null 2>&1; (git merge-base origin/%TARGET_BRANCH% HEAD).Trim() } catch { (git merge-base master HEAD).Trim() }"'
