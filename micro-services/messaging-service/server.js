@@ -166,7 +166,6 @@ app.use((req, res, next) => {
  */
 
 let authLimiter = null;
-
 if (redisClient) {
   try {
     authLimiter = new RateLimiterRedis({
@@ -197,7 +196,6 @@ app.use("/api/v1/auth", async (req, res, next) => {
     });
   }
 });
-
 
 /**
  * @ratelimiter Sensitive Endpoint Limiter
