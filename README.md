@@ -1,3 +1,9 @@
+# Mutli-Vendor E-Commerce Website <i>(Micro Servies Architecture)</i>
+
+
+
+# API Sever Architecture Diagram
+
 ```mermaid
 graph TD
 
@@ -50,3 +56,16 @@ graph TD
     14["Payment Service<br>Node.js/Express"] -->|persists data to| 6["MongoDB<br>Database"]
 
 ```
+
+## Docker Enviromnet 
+
+![Images](https://res.cloudinary.com/dgz7hqbl9/image/upload/v1764528871/Screenshot_2025-12-01_000521_kfbt0k.png)
+
+## CI/CD Pipline (Jenkins)
+
+![Image](https://res.cloudinary.com/dgz7hqbl9/image/upload/v1764528871/Screenshot_2025-11-30_232159_ybjm3x.png)
+
+### Stage Diagram
+
+![Image](https://res.cloudinary.com/dgz7hqbl9/image/upload/v1764528871/Screenshot_2025-12-01_000802_algvb6.png)
+
