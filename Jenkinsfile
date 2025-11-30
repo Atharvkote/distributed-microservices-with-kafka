@@ -1,158 +1,161 @@
+// Jenkinsfile for Multibranch Pipeline - builds only changed microservices and pushes on main/master
 pipeline {
-  agent any
+  agent { label 'docker-node' }   // change if your agent label is different
+  options { timestamps(); ansiColor('xterm'); skipDefaultCheckout(true) }
 
   environment {
-    DOCKERHUB_NAMESPACE = "atharvkote"
-    DOCKERHUB_CRED_ID  = "DOCKERHUB_LOGIN"
+    DOCKERHUB_NAMESPACE = "atharvkote"          // your Docker Hub org/user
     BASE_DIR = "micro-services"
-    SERVICES = "payment-service analytics-service orders-service catalog-service messaging-service identity-service"
-    TARGET_BRANCH = "master"
+    SERVICES = "analytics-service catalog-service identity-service messaging-service orders-service payment-service"
+    DOCKER_CRED_ID = "DOCKERHUB_LOGIN"         // Jenkins credential ID for Docker Hub (username+token)
+    PRIMARY_BRANCHES = "master"           // branches allowed to push images
   }
 
   stages {
-
     stage('Checkout') {
       steps {
         checkout scm
       }
     }
 
-    stage('Detect Changes') {
+    stage('Detect changes') {
       steps {
         script {
-          powershell(returnStdout: true, script: '''
-# Use the TARGET_BRANCH environment variable from Jenkins
-$target = $env:TARGET_BRANCH
+          // get branch and PR info
+          def branch = env.BRANCH_NAME ?: 'unknown'
+          def isPR = env.CHANGE_ID ? true : false
+          echo "Branch: ${branch}  |  IsPR: ${isPR}"
 
-# Try fetching the target branch to have origin/$target locally (ignore fetch errors)
-try { git fetch origin "$target":"$target" } catch {}
+          // Get short commit hash
+          def shortCommit = powershell(returnStdout: true, script: 'git rev-parse --short=7 HEAD').trim()
+          env.SHORT_COMMIT = shortCommit
+          echo "Short commit: ${shortCommit}"
 
-# Compute a short SHA for image tagging
-$short = (git rev-parse --short=7 HEAD).Trim()
+          // Get changed files list (powershell) - prefer diff against origin/<branch>, fallback to HEAD^..HEAD, fallback to ls-files
+          def changedJson = powershell(returnStdout: true, script: '''
+            Set-StrictMode -Off
+            $branch = "${env.BRANCH_NAME}"
+            if (-not $branch) { $branch = "main" }
+            try { git fetch origin $branch --depth=1 2>$null } catch {}
+            $diff = ""
+            try { $diff = git diff --name-only origin/$branch...HEAD 2>$null } catch {}
+            if ([string]::IsNullOrWhiteSpace($diff)) { $diff = git diff --name-only HEAD^ HEAD 2>$null }
+            if ([string]::IsNullOrWhiteSpace($diff)) { $diff = git ls-files }
+            $diff -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" } | Sort-Object -Unique | ConvertTo-Json
+          ''').trim()
 
-# Try to compute merge-base with origin/$target; if not available, fall back to master
-try {
-  git rev-parse --verify origin/$target > $null 2>&1
-  $base = (git merge-base origin/$target HEAD).Trim()
-} catch {
-  $base = (git merge-base master HEAD).Trim()
-}
+          def changedFiles = readJSON text: changedJson
+          echo "Changed files: ${changedFiles}"
 
-# Produce a newline-separated list of changed files between base and HEAD
-$changed = ''
-try { $changed = (git diff --name-only $base..HEAD) -join "`n" } catch {}
+          // Decide which services to build
+          def services = env.SERVICES.split()
+          def rebuildAllTriggers = ['docker-compose.yaml','docker-compose.yml','README.md','README.MD','README']
+          def rebuildAll = false
+          def toBuild = []
 
-# Create git-info.txt expected by the Groovy code
-$gitInfo = @"
-SHORT_SHA=$short
-CHANGED_FILES<<EOF
-$changed
-EOF
-"@
-
-Set-Content -Path git-info.txt -Value $gitInfo -Encoding UTF8
-
-# Emit a concise log for debugging the job output
-Write-Host "SHORT_SHA=$short"
-Write-Host "Changed files (preview):"
-if ($changed) { Write-Host $changed } else { Write-Host "<none>" }
-''')
-          // Read the generated properties file and export env vars for subsequent stages
-          def props = readProperties file: "git-info.txt"
-          env.IMAGE_TAG_SHA = props.SHORT_SHA
-          env.CHANGED_FILES = props.CHANGED_FILES ?: ""
-          echo "Detected short SHA: ${env.IMAGE_TAG_SHA}"
-          echo "Changed files:\n${env.CHANGED_FILES}"
-        }
-      }
-    }
-
-    stage('Decide Services') {
-      steps {
-        script {
-          def changedSvcs = []
-          // split the CHANGED_FILES into lines; handle empty safely
-          def list = (env.CHANGED_FILES ?: "").split("\\r?\\n")
-
-          for (svc in env.SERVICES.split()) {
-            // look for files under BASE_DIR/<svc>/
-            def prefix = "${env.BASE_DIR}/${svc}/"
-            if (list.find{ it?.trim()?.startsWith(prefix) }) {
-              changedSvcs << svc
+          for (f in changedFiles) {
+            for (t in rebuildAllTriggers) {
+              if (f.equalsIgnoreCase(t) || f == t) {
+                rebuildAll = true
+                echo "Repo-wide trigger changed file: ${f}"
+              }
             }
           }
 
-          env.CHANGED_SERVICES = changedSvcs.join(" ")
-          if (env.CHANGED_SERVICES?.trim()) {
-            echo "Will build: ${env.CHANGED_SERVICES}"
+          if (rebuildAll) {
+            toBuild = services as List
           } else {
-            echo "No services changed under ${env.BASE_DIR}; skipping build stage."
+            for (svc in services) {
+              def prefix = "${BASE_DIR}/${svc}/"
+              for (f in changedFiles) {
+                if (f.startsWith(prefix) || f.startsWith(prefix.replace('/','\\\\'))) {
+                  toBuild.add(svc)
+                  break
+                }
+              }
+            }
           }
+
+          toBuild = toBuild.unique()
+          if (toBuild.size() == 0) {
+            echo "No microservice changes detected."
+            env.CHANGED_SERVICES = ""
+          } else {
+            echo "Services to build: ${toBuild}"
+            env.CHANGED_SERVICES = toBuild.join(',')
+          }
+
+          // expose flags
+          env.IS_PR = isPR.toString()
+          env.CURRENT_BRANCH = branch
         }
       }
     }
 
-    stage('Kaniko Build & Push') {
-      when { expression { return env.CHANGED_SERVICES?.trim() } }
+    stage('Docker Login (if needed)') {
+      when { expression { return (env.CHANGED_SERVICES && env.CHANGED_SERVICES.trim().length() > 0 && env.IS_PR == 'false' && env.PRIMARY_BRANCHES.tokenize().contains(env.CURRENT_BRANCH) } ) }
+      steps {
+        withCredentials([usernamePassword(credentialsId: env.DOCKER_CRED_ID, usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
+          // Windows: feed password to docker login
+          bat 'echo %DH_PASS% | docker login -u %DH_USER% --password-stdin'
+        }
+      }
+    }
+
+    stage('Build & (optionally) Push') {
+      when { expression { return (env.CHANGED_SERVICES && env.CHANGED_SERVICES.trim().length() > 0) } }
       steps {
         script {
-          // Use DockerHub credentials to produce a kaniko config json file.
-          withCredentials([
-            usernamePassword(
-              credentialsId: env.DOCKERHUB_CRED_ID,
-              usernameVariable: "DH_USER",
-              passwordVariable: "DH_PASS"
-            )
-          ]) {
-            // Build the auth JSON (simple base64 auth)
-            env.AUTH_JSON = """{
-  "auths": {
-    "https://index.docker.io/v1/": {
-      "auth": "${DH_USER}:${DH_PASS}".bytes.encodeBase64().toString()
+          def list = env.CHANGED_SERVICES.split(',').findAll{ it?.trim() }
+          def tasks = [:]
+
+          for (svc in list) {
+            def service = svc.trim()
+            def tag = "${env.DOCKERHUB_NAMESPACE}/${service}:${env.SHORT_COMMIT}-${env.BUILD_NUMBER}"
+            def ctxWindows = "${env.BASE_DIR}\\${service}"        // windows path for agent
+            def tService = service
+            def tTag = tag
+            def tCtx = ctxWindows
+
+            tasks[tService] = {
+              // run on same agent/node
+              node(env.NODE_NAME) {
+                stage("Build ${tService}") {
+                  echo "Building ${tTag} from ${tCtx}"
+                  bat "docker build -t ${tTag} ${tCtx}"
+                }
+                stage("Push ${tService}") {
+                  // push only for non-PR and only on allowed primary branches
+                  if (env.IS_PR == 'false' && env.PRIMARY_BRANCHES.tokenize().contains(env.CURRENT_BRANCH)) {
+                    echo "Pushing ${tTag}"
+                    bat "docker push ${tTag}"
+                  } else {
+                    echo "Skipping push for ${tService} (IS_PR=${env.IS_PR}, branch=${env.CURRENT_BRANCH})"
+                  }
+                }
+              }
+            }
+          }
+
+          if (tasks.size() > 0) {
+            parallel tasks
+          } else {
+            echo "Nothing to build."
+          }
+        }
+      }
     }
-  }
-}"""
-            writeFile file: 'kaniko-auth.json', text: env.AUTH_JSON, encoding: 'UTF-8'
-
-            // Iterate over changed services and run kaniko inside Docker for each
-            for (svc in env.CHANGED_SERVICES.split()) {
-              def dockerImage = "${env.DOCKERHUB_NAMESPACE}/${svc}"
-              def context = "${env.BASE_DIR}/${svc}"
-              echo "Building ${dockerImage} from ${context}"
-
-              // Run Kaniko inside a Docker container. Keep this as a single-line bat to avoid multiline parsing issues.
-              // The %cd% expansion and Windows path separators are used because your agent is Windows.
-              bat """
-@echo off
-if not exist "${context}\\Dockerfile" (
-  echo "No Dockerfile found at ${context}\\Dockerfile - skipping ${svc}"
-  exit /B 0
-)
-docker run --rm ^
-  -v "%cd%\\\\${context}:/workspace" ^
-  -v "%cd%\\\\kaniko-auth.json:/kaniko/.docker/config.json:ro" ^
-  gcr.io/kaniko-project/executor:latest ^
-  --context=/workspace ^
-  --dockerfile=/workspace/Dockerfile ^
-  --destination=${dockerImage}:${env.IMAGE_TAG_SHA} ^
-  --destination=${dockerImage}:latest
-"""
-            } // end for
-          } // end withCredentials
-        } // end script
-      } // end steps
-    } // end stage
-  } // end stages
+  } // stages
 
   post {
     always {
       script {
-        // print a short summary
-        echo "Pipeline finished. IMAGE_TAG_SHA=${env.IMAGE_TAG_SHA ?: '<none>'}, CHANGED_SERVICES=${env.CHANGED_SERVICES ?: '<none>'}"
+        if (env.CHANGED_SERVICES && env.CHANGED_SERVICES.trim().length() > 0 && env.IS_PR == 'false' && env.PRIMARY_BRANCHES.tokenize().contains(env.CURRENT_BRANCH)) {
+          bat 'docker logout || echo logout-failed'
+        }
       }
     }
-    failure {
-      echo "Pipeline failed. Inspect console output for errors."
-    }
+    success { echo "Pipeline finished SUCCESS" }
+    failure { echo "Pipeline FAILED" }
   }
 }
