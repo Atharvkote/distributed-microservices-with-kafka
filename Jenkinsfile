@@ -1,5 +1,5 @@
 pipeline {
-  agent any
+  agent { label 'linux' }
 
   environment {
     DOCKERHUB_NAMESPACE = "atharvkote"
@@ -7,6 +7,7 @@ pipeline {
     SERVICES = "payment-service analytics-service order-service catalog-service messaging-service identity-service"
     BASE_DIR = "micro-services"
     TARGET_BRANCH = "master"
+    IMAGE_TAG_LATEST = "latest"
   }
 
   stages {
@@ -14,39 +15,24 @@ pipeline {
       steps {
         checkout scm
         script {
-          def shortSha = ""
-          def changedFilesRaw = ""
           def target = env.TARGET_BRANCH ?: "master"
 
-          if (isUnix()) {
-            sh """
-              git fetch origin ${target}:${target} || git fetch origin master:master || true
-            """
-            shortSha = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
-            def base = sh(script: "git rev-parse --verify origin/${target} >/dev/null 2>&1 && git merge-base origin/${target} HEAD || git merge-base master HEAD", returnStdout: true).trim()
-            changedFilesRaw = sh(script: "git diff --name-only ${base}..HEAD || true", returnStdout: true).trim()
-          } else {
-            bat 'powershell -NoProfile -Command "try { git fetch origin %TARGET_BRANCH%:%TARGET_BRANCH% } catch { }"'
+          def ps = sh(returnStdout: true, script: """bash -lc '
+git fetch origin ${target}:${target} || git fetch origin master:master || true
+SHORT=\$(git rev-parse --short=7 HEAD)
+BASE=\$(git rev-parse --verify origin/${target} >/dev/null 2>&1 && git merge-base origin/${target} HEAD || git merge-base master HEAD)
+CHANGED=\$(git diff --name-only \${BASE}..HEAD || true)
+printf "%s\\n---GIT-CHANGED-START---\\n%s\\n---GIT-CHANGED-END---\\n" "\$SHORT" "\$CHANGED"
+'""").trim()
 
-            def psOut = bat(returnStdout: true, script:
-              'powershell -NoProfile -Command "'
-              + '$ErrorActionPreference = \\\"SilentlyContinue\\\"; '
-              + '$short = (git rev-parse --short=7 HEAD).Trim(); '
-              + 'try { git rev-parse --verify origin/%TARGET_BRANCH% > $null 2>&1; $base = (git merge-base origin/%TARGET_BRANCH% HEAD).Trim() } catch { $base = (git merge-base master HEAD).Trim() }; '
-              + '$changed = \\\"\\\"; try { $changed = (git diff --name-only $base..HEAD) -join \\\"`n\\\" } catch { } ; '
-              + 'Write-Output ($short + \\\"|||\\\" + $base + \\\"|||\\\" + $changed)\"'
-            ).trim()
-
-            def parts = psOut.split('\\|\\|\\|', 3)
-            shortSha = parts.size() > 0 ? parts[0].trim() : ""
-            def base = parts.size() > 1 ? parts[1].trim() : ""
-            changedFilesRaw = parts.size() > 2 ? parts[2].trim() : ""
-          }
+          def markerStart = '---GIT-CHANGED-START---'
+          def markerEnd = '---GIT-CHANGED-END---'
+          def idx = ps.indexOf(markerStart)
+          def shortSha = ps.substring(0, idx).trim()
+          def changedBlock = ps.substring(idx + markerStart.length(), ps.indexOf(markerEnd)).trim()
 
           env.IMAGE_TAG_SHA = shortSha
-          env.IMAGE_TAG_LATEST = "latest"
-          env.CHANGED_FILES = (changedFilesRaw ?: "").trim()
-
+          env.CHANGED_FILES = changedBlock
           echo "Short SHA: ${env.IMAGE_TAG_SHA}"
           echo "Changed files (base..HEAD):"
           echo "${env.CHANGED_FILES}"
@@ -59,7 +45,7 @@ pipeline {
         script {
           def allServices = env.SERVICES.split()
           def changedServicesList = []
-          def changedList = env.CHANGED_FILES?.split('\n') ?: []
+          def changedList = (env.CHANGED_FILES ?: "").split('\\n') as List
 
           for (svc in allServices) {
             if (changedList.find { it?.trim()?.startsWith("${env.BASE_DIR}/${svc}/") }) {
@@ -67,12 +53,11 @@ pipeline {
             }
           }
 
-          if (env.CHANGED_FILES?.toLowerCase()?.contains("jenkinsfile")) {
+          if ((env.CHANGED_FILES ?: "").toLowerCase().contains("jenkinsfile")) {
             changedServicesList = allServices
           }
 
           env.CHANGED_SERVICES = changedServicesList.join(' ')
-
           if (changedServicesList.isEmpty()) {
             echo "No services changed"
           } else {
@@ -88,16 +73,7 @@ pipeline {
         withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CRED_ID}",
           usernameVariable: 'DOCKERHUB_USERNAME',
           passwordVariable: 'DOCKERHUB_TOKEN')]) {
-          script {
-            if (isUnix()) {
-              sh 'echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin'
-            } else {
-              bat """
-                @echo off
-                powershell -NoProfile -Command "('${DOCKERHUB_TOKEN}') | docker login -u '${DOCKERHUB_USERNAME}' --password-stdin"
-              """
-            }
-          }
+          sh 'echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin'
         }
       }
     }
@@ -127,11 +103,7 @@ pipeline {
   post {
     always {
       script {
-        if (isUnix()) {
-          sh 'docker logout || true'
-        } else {
-          bat '@echo off & docker logout || exit 0'
-        }
+        sh 'docker logout || true'
       }
     }
     success { echo "Pipeline completed successfully." }
@@ -153,21 +125,18 @@ def buildAndPushService(String svc) {
           def tagSha = "${image}:${env.IMAGE_TAG_SHA}"
           def tagLatest = "${image}:${env.IMAGE_TAG_LATEST}"
 
-          if (isUnix()) {
-            sh """
-              docker build -t ${tagSha} .
-              docker tag ${tagSha} ${tagLatest}
-              docker push ${tagSha}
-              docker push ${tagLatest}
-              docker rmi ${tagLatest} || true
-              docker rmi ${tagSha} || true
-            """
-          } else {
-            bat """
-              @echo off
-              powershell -NoProfile -Command "docker build -t ${tagSha} .; docker tag ${tagSha} ${tagLatest}; docker push ${tagSha}; docker push ${tagLatest}; docker rmi ${tagLatest} -ErrorAction SilentlyContinue; docker rmi ${tagSha} -ErrorAction SilentlyContinue"
-            """
-          }
+          sh """
+set -e
+docker buildx create --use --name builder || true
+docker buildx inspect --bootstrap
+docker buildx build \\
+  --builder builder \\
+  --tag ${tagSha} \\
+  --tag ${tagLatest} \\
+  --cache-from=type=registry,ref=${image}:cache \\
+  --cache-to=type=registry,ref=${image}:cache,mode=max \\
+  --push .
+"""
         }
       }
     }
