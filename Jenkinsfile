@@ -3,7 +3,7 @@ pipeline {
   options { timestamps(); skipDefaultCheckout() }
 
   environment {
-    DOCKERHUB_NAMESPACE = "atharvkote"
+    DOCKERHUB_NAMESPACE = "atharvakote"
     BASE_DIR = "micro-services"
     SERVICES = "analytics-service catalog-service identity-service messaging-service orders-service payment-service"
     DOCKER_CRED_ID = "DOCKERHUB_LOGIN"
