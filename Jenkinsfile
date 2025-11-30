@@ -1,6 +1,6 @@
 pipeline {
-  agent { label 'docker-node' }
-  options { timestamps(); ansiColor('xterm'); skipDefaultCheckout(true) }
+  agent { label 'docker-agent' }
+  options { timestamps(); skipDefaultCheckout() }
 
   environment {
     DOCKERHUB_NAMESPACE = "atharvkote"
