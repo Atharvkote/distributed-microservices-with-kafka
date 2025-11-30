@@ -39,7 +39,15 @@ pipeline {
             \$diff -split "`n" | ForEach-Object { \$_.Trim() } | Where-Object { \$_.Length -gt 0 } | Sort-Object -Unique | ConvertTo-Json
           """).trim()
 
-          def changedFiles = readJSON text: changedJson
+          def changedFiles = []
+          if (changedJson && changedJson.trim().length() > 0) {
+            try {
+              changedFiles = new groovy.json.JsonSlurper().parseText(changedJson)
+            } catch (err) {
+              echo "Failed to parse changedJson, falling back to empty list: ${err}"
+              changedFiles = []
+            }
+          }
           echo "Changed files: ${changedFiles}"
 
           def services = env.SERVICES.split()
