@@ -3,47 +3,49 @@ pipeline {
 
   environment {
     DOCKERHUB_NAMESPACE = "atharvkote"
-    DOCKERHUB_CRED_ID  = "DOCKERHUB_LOGIN" 
-    SERVICES = "micro-services-payment-service micro-services-analytics-service micro-services-order-service micro-services-catalog-service micro-services-messaging-service micro-services-identity-service"
-    BASE_DIR = "micro-services" 
+    DOCKERHUB_CRED_ID  = "DOCKERHUB_LOGIN"
+    SERVICES = "payment-service analytics-service order-service catalog-service messaging-service identity-service"
+    BASE_DIR = "micro-services"
     TARGET_BRANCH = "master"
   }
 
   stages {
     stage('Checkout & Detect Changes') {
-  steps {
-    checkout scm
-    script {
-      def shortSha = ""
-      def changedFilesRaw = ""
-      def target = env.TARGET_BRANCH ?: "master"
+      steps {
+        checkout scm
+        script {
+          def shortSha = ""
+          def changedFilesRaw = ""
+          def target = env.TARGET_BRANCH ?: "master"
 
-      if (isUnix()) {
-        sh """
-          set -e
-          git fetch origin ${target}:${target} || git fetch origin master:master || true
-        """
-        shortSha = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
-        def base = sh(script: "git rev-parse --verify origin/${target} >/dev/null 2>&1 && git merge-base origin/${target} HEAD || git merge-base master HEAD", returnStdout: true).trim()
-        changedFilesRaw = sh(script: "git diff --name-only ${base}..HEAD || true", returnStdout: true).trim()
-      } else {
-        bat "git fetch origin %TARGET_BRANCH%:%TARGET_BRANCH% || (git fetch origin master:master || exit /b 0)"
-        shortSha = bat(script: "git rev-parse --short=7 HEAD", returnStdout: true).trim()
-        def base = bat(returnStdout: true, script: '@echo off & for /f "delims=" %%b in (\'git rev-parse --verify origin/%TARGET_BRANCH% 2^>nul && git merge-base origin/%TARGET_BRANCH% HEAD || git merge-base master HEAD\') do @echo %%b').trim()
-        changedFilesRaw = bat(returnStdout: true, script: "@echo off & git diff --name-only ${base}..HEAD || exit /b 0").trim()
+          if (isUnix()) {
+            sh """
+              git fetch origin ${target}:${target} || git fetch origin master:master || true
+            """
+            shortSha = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
+            def base = sh(script: "git rev-parse --verify origin/${target} >/dev/null 2>&1 && git merge-base origin/${target} HEAD || git merge-base master HEAD", returnStdout: true).trim()
+            changedFilesRaw = sh(script: "git diff --name-only ${base}..HEAD || true", returnStdout: true).trim()
+          } else {
+            bat 'powershell -NoProfile -Command "git fetch origin %TARGET_BRANCH%:%TARGET_BRANCH% -ErrorAction SilentlyContinue"'
+            shortSha = bat(returnStdout: true, script: 'powershell -NoProfile -Command "(git rev-parse --short=7 HEAD).Trim()"').trim()
+            def base = bat(returnStdout: true, script:
+              'powershell -NoProfile -Command "try { git rev-parse --verify origin/%TARGET_BRANCH% > $null 2>&1; (git merge-base origin/%TARGET_BRANCH% HEAD).Trim() } catch { (git merge-base master HEAD).Trim() }"'
+            ).trim()
+            changedFilesRaw = bat(returnStdout: true, script:
+              "powershell -NoProfile -Command \"(git diff --name-only ${base}..HEAD) -join '\\n'\""
+            ).trim()
+          }
+
+          env.IMAGE_TAG_SHA = shortSha
+          env.IMAGE_TAG_LATEST = "latest"
+          env.CHANGED_FILES = (changedFilesRaw ?: "").trim()
+
+          echo "Short SHA: ${env.IMAGE_TAG_SHA}"
+          echo "Changed files (base..HEAD):"
+          echo "${env.CHANGED_FILES}"
+        }
       }
-
-      env.IMAGE_TAG_SHA = shortSha
-      env.IMAGE_TAG_LATEST = "latest"
-      env.CHANGED_FILES = (changedFilesRaw ?: "").trim()
-
-      echo "Short SHA: ${env.IMAGE_TAG_SHA}"
-      echo "Changed files (base..HEAD):"
-      echo "${env.CHANGED_FILES}"
     }
-  }
-}
-
 
     stage('Decide services to build') {
       steps {
@@ -58,14 +60,14 @@ pipeline {
             }
           }
 
-          if (env.CHANGED_FILES?.contains("Jenkinsfile")) {
-            echo "Jenkinsfile changed → building ALL services"
+          if (env.CHANGED_FILES?.toLowerCase()?.contains("jenkinsfile")) {
             changedServicesList = allServices
           }
 
           env.CHANGED_SERVICES = changedServicesList.join(' ')
+
           if (changedServicesList.isEmpty()) {
-            echo "No services changed → nothing to build."
+            echo "No services changed"
           } else {
             echo "Services to build: ${changedServicesList}"
           }
@@ -77,15 +79,15 @@ pipeline {
       when { expression { return env.CHANGED_SERVICES?.trim() } }
       steps {
         withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CRED_ID}",
-                                          usernameVariable: 'DOCKERHUB_USERNAME',
-                                          passwordVariable: 'DOCKERHUB_TOKEN')]) {
+          usernameVariable: 'DOCKERHUB_USERNAME',
+          passwordVariable: 'DOCKERHUB_TOKEN')]) {
           script {
             if (isUnix()) {
               sh 'echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin'
             } else {
               bat """
                 @echo off
-                powershell -NoProfile -NonInteractive -Command "('${DOCKERHUB_TOKEN}') | docker login -u '${DOCKERHUB_USERNAME}' --password-stdin"
+                powershell -NoProfile -Command "('${DOCKERHUB_TOKEN}') | docker login -u '${DOCKERHUB_USERNAME}' --password-stdin"
               """
             }
           }
@@ -126,28 +128,26 @@ pipeline {
       }
     }
     success { echo "Pipeline completed successfully." }
-    failure { echo "Pipeline failed — check console output." }
+    failure { echo "Pipeline failed." }
   }
 }
 
-// helper
 def buildAndPushService(String svc) {
   node {
     stage("Build ${svc}") {
-      // IMPORTANT: adjust dir to include BASE_DIR
       dir("${env.BASE_DIR}/${svc}") {
         script {
           if (!fileExists("Dockerfile")) {
-            echo "Skipping ${svc} — no Dockerfile found."
+            echo "Skipping ${svc}: no Dockerfile"
             return
           }
+
           def image = "${env.DOCKERHUB_NAMESPACE}/${svc}".toLowerCase()
           def tagSha = "${image}:${env.IMAGE_TAG_SHA}"
           def tagLatest = "${image}:${env.IMAGE_TAG_LATEST}"
 
           if (isUnix()) {
             sh """
-              set -e
               docker build -t ${tagSha} .
               docker tag ${tagSha} ${tagLatest}
               docker push ${tagSha}
@@ -158,7 +158,7 @@ def buildAndPushService(String svc) {
           } else {
             bat """
               @echo off
-              powershell -NoProfile -NonInteractive -Command "docker build -t ${tagSha} . ; docker tag ${tagSha} ${tagLatest} ; docker push ${tagSha} ; docker push ${tagLatest} ; docker rmi ${tagLatest} -ErrorAction SilentlyContinue ; docker rmi ${tagSha} -ErrorAction SilentlyContinue"
+              powershell -NoProfile -Command "docker build -t ${tagSha} .; docker tag ${tagSha} ${tagLatest}; docker push ${tagSha}; docker push ${tagLatest}; docker rmi ${tagLatest} -ErrorAction SilentlyContinue; docker rmi ${tagSha} -ErrorAction SilentlyContinue"
             """
           }
         }
