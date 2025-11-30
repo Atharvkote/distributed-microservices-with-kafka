@@ -1,100 +1,100 @@
 pipeline {
-  agent { label 'linux' }
+  agent {
+    docker {
+      image 'docker:24.0-cli'
+      args '--privileged -v /var/run/docker.sock:/var/run/docker.sock'
+    }
+  }
 
   environment {
     DOCKERHUB_NAMESPACE = "atharvkote"
     DOCKERHUB_CRED_ID  = "DOCKERHUB_LOGIN"
-    SERVICES = "payment-service analytics-service order-service catalog-service messaging-service identity-service"
+    SERVICES = "payment-service analytics-service orders-service catalog-service messaging-service identity-service"
     BASE_DIR = "micro-services"
     TARGET_BRANCH = "master"
-    IMAGE_TAG_LATEST = "latest"
   }
 
   stages {
-    stage('Checkout & Detect Changes') {
+
+    stage('Checkout') {
       steps {
         checkout scm
+      }
+    }
+
+    stage('Detect Changes') {
+      steps {
         script {
-          def target = env.TARGET_BRANCH ?: "master"
+          def result = sh(returnStdout: true, script: """
+            git fetch origin ${TARGET_BRANCH}:${TARGET_BRANCH} || true
+            SHORT=\$(git rev-parse --short=7 HEAD)
+            BASE=\$(git merge-base origin/${TARGET_BRANCH} HEAD)
+            CHANGED=\$(git diff --name-only \$BASE..HEAD || true)
 
-          def ps = sh(returnStdout: true, script: """bash -lc '
-git fetch origin ${target}:${target} || git fetch origin master:master || true
-SHORT=\$(git rev-parse --short=7 HEAD)
-BASE=\$(git rev-parse --verify origin/${target} >/dev/null 2>&1 && git merge-base origin/${target} HEAD || git merge-base master HEAD)
-CHANGED=\$(git diff --name-only \${BASE}..HEAD || true)
-printf "%s\\n---GIT-CHANGED-START---\\n%s\\n---GIT-CHANGED-END---\\n" "\$SHORT" "\$CHANGED"
-'""").trim()
+            echo "SHORT_SHA=\$SHORT" > git-info.txt
+            echo "CHANGED_FILES<<EOF" >> git-info.txt
+            echo "\$CHANGED" >> git-info.txt
+            echo "EOF" >> git-info.txt
+          """).trim()
 
-          def markerStart = '---GIT-CHANGED-START---'
-          def markerEnd = '---GIT-CHANGED-END---'
-          def idx = ps.indexOf(markerStart)
-          def shortSha = ps.substring(0, idx).trim()
-          def changedBlock = ps.substring(idx + markerStart.length(), ps.indexOf(markerEnd)).trim()
+          def props = readProperties file: "git-info.txt"
+          env.IMAGE_TAG_SHA = props.SHORT_SHA
 
-          env.IMAGE_TAG_SHA = shortSha
-          env.CHANGED_FILES = changedBlock
-          echo "Short SHA: ${env.IMAGE_TAG_SHA}"
-          echo "Changed files (base..HEAD):"
-          echo "${env.CHANGED_FILES}"
+          env.CHANGED_FILES = props.CHANGED_FILES.trim()
+          echo "Changed files:\n${env.CHANGED_FILES}"
         }
       }
     }
 
-    stage('Decide services to build') {
+    stage('Decide Services To Build') {
       steps {
         script {
-          def allServices = env.SERVICES.split()
-          def changedServicesList = []
-          def changedList = (env.CHANGED_FILES ?: "").split('\\n') as List
+          def changedSvcs = []
+          def changedList = env.CHANGED_FILES.split("\\r?\\n")
 
-          for (svc in allServices) {
-            if (changedList.find { it?.trim()?.startsWith("${env.BASE_DIR}/${svc}/") }) {
-              changedServicesList << svc
+          for (svc in env.SERVICES.split()) {
+            if (changedList.find { it.startsWith("${env.BASE_DIR}/${svc}/") }) {
+              changedSvcs << svc
             }
           }
 
-          if ((env.CHANGED_FILES ?: "").toLowerCase().contains("jenkinsfile")) {
-            changedServicesList = allServices
+          if (env.CHANGED_FILES.toLowerCase().contains("jenkinsfile")) {
+            changedSvcs = env.SERVICES.split()
           }
 
-          env.CHANGED_SERVICES = changedServicesList.join(' ')
-          if (changedServicesList.isEmpty()) {
-            echo "No services changed"
-          } else {
-            echo "Services to build: ${changedServicesList}"
-          }
+          env.CHANGED_SERVICES = changedSvcs.join(" ")
+          echo "Services to Build: ${env.CHANGED_SERVICES}"
         }
       }
     }
 
-    stage('Docker Hub Login') {
-      when { expression { return env.CHANGED_SERVICES?.trim() } }
+    stage('Docker Login') {
+      when { expression { env.CHANGED_SERVICES?.trim() } }
       steps {
         withCredentials([usernamePassword(credentialsId: "${DOCKERHUB_CRED_ID}",
-          usernameVariable: 'DOCKERHUB_USERNAME',
-          passwordVariable: 'DOCKERHUB_TOKEN')]) {
-          sh 'echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin'
+            usernameVariable: 'USER',
+            passwordVariable: 'PASS')]) {
+          sh 'echo "$PASS" | docker login -u "$USER" --password-stdin'
         }
       }
     }
 
-    stage('Build & Push Changed Services') {
-      when { expression { return env.CHANGED_SERVICES?.trim() } }
+    stage('Build & Push') {
+      when { expression { env.CHANGED_SERVICES?.trim() } }
       steps {
         script {
-          def list = env.CHANGED_SERVICES.split()
-          if (list.size() > 1) {
-            def branches = [:]
-            for (svc in list) {
-              def svcLocal = svc
-              branches[svcLocal] = {
-                buildAndPushService(svcLocal)
-              }
+          def svcs = env.CHANGED_SERVICES.split()
+
+          def branches = [:]
+
+          for (svc in svcs) {
+            def svcName = svc
+            branches[svcName] = {
+              buildAndPushService(svcName)
             }
-            parallel branches
-          } else {
-            buildAndPushService(list[0])
           }
+
+          parallel branches
         }
       }
     }
@@ -102,42 +102,26 @@ printf "%s\\n---GIT-CHANGED-START---\\n%s\\n---GIT-CHANGED-END---\\n" "\$SHORT" 
 
   post {
     always {
-      script {
-        sh 'docker logout || true'
-      }
+      sh 'docker logout || true'
     }
-    success { echo "Pipeline completed successfully." }
-    failure { echo "Pipeline failed." }
   }
 }
 
 def buildAndPushService(String svc) {
-  node {
-    stage("Build ${svc}") {
-      dir("${env.BASE_DIR}/${svc}") {
-        script {
-          if (!fileExists("Dockerfile")) {
-            echo "Skipping ${svc}: no Dockerfile"
-            return
-          }
+  stage("Build ${svc}") {
+    dir("${env.BASE_DIR}/${svc}") {
+      script {
+        def image = "${env.DOCKERHUB_NAMESPACE}/${svc}".toLowerCase()
+        def tagSha = "${image}:${env.IMAGE_TAG_SHA}"
+        def tagLatest = "${image}:latest"
 
-          def image = "${env.DOCKERHUB_NAMESPACE}/${svc}".toLowerCase()
-          def tagSha = "${image}:${env.IMAGE_TAG_SHA}"
-          def tagLatest = "${image}:${env.IMAGE_TAG_LATEST}"
-
-          sh """
-set -e
-docker buildx create --use --name builder || true
-docker buildx inspect --bootstrap
-docker buildx build \\
-  --builder builder \\
-  --tag ${tagSha} \\
-  --tag ${tagLatest} \\
-  --cache-from=type=registry,ref=${image}:cache \\
-  --cache-to=type=registry,ref=${image}:cache,mode=max \\
-  --push .
-"""
-        }
+        sh """
+          docker buildx create --use builder || true
+          docker buildx build \\
+            --tag ${tagSha} \\
+            --tag ${tagLatest} \\
+            --push .
+        """
       }
     }
   }
