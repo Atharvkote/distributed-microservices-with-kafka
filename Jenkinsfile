@@ -11,25 +11,39 @@ pipeline {
 
   stages {
     stage('Checkout & Detect Changes') {
-      steps {
-        checkout scm
-        script {
-          if (isUnix()) {
-            sh "git fetch origin ${TARGET_BRANCH}:${TARGET_BRANCH} || true"
-            SHORT_SHA = sh(script: "git rev-parse --short=7 HEAD", returnStdout: true).trim()
-            env.CHANGED_FILES = sh(script: "git diff --name-only ${TARGET_BRANCH}...HEAD || true", returnStdout: true).trim()
-          } else {
-            bat "git fetch origin %TARGET_BRANCH%:%TARGET_BRANCH% || exit /b 0"
-            SHORT_SHA = bat(script: "git rev-parse --short=7 HEAD", returnStdout: true).trim()
-            env.CHANGED_FILES = bat(script: "git diff --name-only %TARGET_BRANCH%...HEAD || exit /b 0", returnStdout: true).trim()
-          }
-          env.IMAGE_TAG_SHA = SHORT_SHA
-          env.IMAGE_TAG_LATEST = "latest"
-          echo "Short SHA: ${env.IMAGE_TAG_SHA}"
-          echo "Changed files:\n${env.CHANGED_FILES}"
-        }
+  steps {
+    checkout scm
+    script {
+      def shortSha = ""
+      def changedFilesRaw = ""
+      def target = env.TARGET_BRANCH ?: "master"
+
+      if (isUnix()) {
+        sh """
+          set -e
+          git fetch origin ${target}:${target} || git fetch origin master:master || true
+        """
+        shortSha = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
+        def base = sh(script: "git rev-parse --verify origin/${target} >/dev/null 2>&1 && git merge-base origin/${target} HEAD || git merge-base master HEAD", returnStdout: true).trim()
+        changedFilesRaw = sh(script: "git diff --name-only ${base}..HEAD || true", returnStdout: true).trim()
+      } else {
+        bat "git fetch origin %TARGET_BRANCH%:%TARGET_BRANCH% || (git fetch origin master:master || exit /b 0)"
+        shortSha = bat(script: "git rev-parse --short=7 HEAD", returnStdout: true).trim()
+        def base = bat(returnStdout: true, script: '@echo off & for /f "delims=" %%b in (\'git rev-parse --verify origin/%TARGET_BRANCH% 2^>nul && git merge-base origin/%TARGET_BRANCH% HEAD || git merge-base master HEAD\') do @echo %%b').trim()
+        changedFilesRaw = bat(returnStdout: true, script: "@echo off & git diff --name-only ${base}..HEAD || exit /b 0").trim()
       }
+
+      env.IMAGE_TAG_SHA = shortSha
+      env.IMAGE_TAG_LATEST = "latest"
+      env.CHANGED_FILES = (changedFilesRaw ?: "").trim()
+
+      echo "Short SHA: ${env.IMAGE_TAG_SHA}"
+      echo "Changed files (base..HEAD):"
+      echo "${env.CHANGED_FILES}"
     }
+  }
+}
+
 
     stage('Decide services to build') {
       steps {
@@ -39,13 +53,11 @@ pipeline {
           def changedList = env.CHANGED_FILES?.split('\n') ?: []
 
           for (svc in allServices) {
-            // check for changes inside BASE_DIR/<svc>/
             if (changedList.find { it?.trim()?.startsWith("${env.BASE_DIR}/${svc}/") }) {
               changedServicesList << svc
             }
           }
 
-          // If Jenkinsfile (in repo root or inside BASE_DIR) changed — build all
           if (env.CHANGED_FILES?.contains("Jenkinsfile")) {
             echo "Jenkinsfile changed → building ALL services"
             changedServicesList = allServices
