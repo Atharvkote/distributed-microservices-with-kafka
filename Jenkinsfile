@@ -27,13 +27,20 @@ pipeline {
             changedFilesRaw = sh(script: "git diff --name-only ${base}..HEAD || true", returnStdout: true).trim()
           } else {
             bat 'powershell -NoProfile -Command "try { git fetch origin %TARGET_BRANCH%:%TARGET_BRANCH% } catch { }"'
-            shortSha = bat(returnStdout: true, script: 'powershell -NoProfile -Command "(git rev-parse --short=7 HEAD).Trim()"').trim()
-            def base = bat(returnStdout: true, script:
-              'powershell -NoProfile -Command "try { git rev-parse --verify origin/%TARGET_BRANCH% > $null 2>&1; (git merge-base origin/%TARGET_BRANCH% HEAD).Trim() } catch { (git merge-base master HEAD).Trim() }"'
+
+            def psOut = bat(returnStdout: true, script:
+              'powershell -NoProfile -Command "'
+              + '$ErrorActionPreference = \\\"SilentlyContinue\\\"; '
+              + '$short = (git rev-parse --short=7 HEAD).Trim(); '
+              + 'try { git rev-parse --verify origin/%TARGET_BRANCH% > $null 2>&1; $base = (git merge-base origin/%TARGET_BRANCH% HEAD).Trim() } catch { $base = (git merge-base master HEAD).Trim() }; '
+              + '$changed = \\\"\\\"; try { $changed = (git diff --name-only $base..HEAD) -join \\\"`n\\\" } catch { } ; '
+              + 'Write-Output ($short + \\\"|||\\\" + $base + \\\"|||\\\" + $changed)\"'
             ).trim()
-            changedFilesRaw = bat(returnStdout: true, script:
-              "powershell -NoProfile -Command \"(git diff --name-only ${base}..HEAD) -join '\\n'\""
-            ).trim()
+
+            def parts = psOut.split('\\|\\|\\|', 3)
+            shortSha = parts.size() > 0 ? parts[0].trim() : ""
+            def base = parts.size() > 1 ? parts[1].trim() : ""
+            changedFilesRaw = parts.size() > 2 ? parts[2].trim() : ""
           }
 
           env.IMAGE_TAG_SHA = shortSha
