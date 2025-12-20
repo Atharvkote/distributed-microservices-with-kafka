@@ -17,8 +17,9 @@ if (!fs.existsSync(logDirectory)) {
 
 const colorMap = {
   "Kafka Server": chalk.magenta.bold,
-  "Socket.io Server": chalk.cyan.bold,
+  "Job Queue": chalk.cyan.bold,
   "MongoDb Server": chalk.green.bold,
+  "Socket.io Server": chalk.blueBright.bold,
   "Redis Server": chalk.red.bold,
   CLOUDINARY: chalk.blue.bold,
   Server: chalk.yellowBright.bold,
@@ -66,12 +67,16 @@ export const mongodbLogger = loggerInstance.child({
   server_name: "MongoDb Server",
 });
 
+export const socketioLogger = loggerInstance.child({
+  server_name: "Socket.io Server",
+});
+
   export const redisLogger = loggerInstance.child({
     server_name: "Redis Server",
   });
 
-export const socketLogger = loggerInstance.child({
-  server_name: "Socket.io Server",
+export const queueLogger = loggerInstance.child({
+  server_name: "Job Queue",
 });
 
 export const cloudinaryLogger = loggerInstance.child({

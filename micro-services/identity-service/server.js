@@ -22,8 +22,10 @@ import "dotenv/config";
 import cors from "cors";
 import express from "express";
 import http from "http";
+import { Kafka, logLevel } from "kafkajs";
 import path from "path";
 import helmet from "helmet";
+import multer from "multer";
 import Redis from "ioredis";
 import cookieParser from "cookie-parser";
 import bodyParser from "body-parser";
@@ -35,12 +37,17 @@ import { fileURLToPath } from "url";
 
 // Connections & Configurations
 import { connectDB, disconnectDB } from "./configs/mongodb.config.js";
-import logger, { redisLogger } from "./utils/logger.js";
+import {
+  disconnectKafka,
+  initKafkaConsumer,
+  initKafkaProducer,
+} from "./configs/kafka.config.js";
+import logger, { kafkaLogger, redisLogger } from "./utils/logger.js";
 
 // Routers
 import userAuthRouter from "./routes/user-auth.routes.js";
-import userProfileRouter from "./routes/user-profile.routes.js";
 import vendorProfileRouter from "./routes/vendor-profile.routes.js";
+import userProfileRouter from "./routes/user-profile.routes.js";
 
 // Configs
 await connectDB();
@@ -122,8 +129,18 @@ app.use(
 );
 
 if (process.env.NODE_ENV === "production") {
-  app.set("trust proxy", 1);
+  app.set("trust proxy", 1); // e.g Nignix , etc
 }
+
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({ message: err.message });
+  }
+  if (err.message?.includes("Only JPG, PNG")) {
+    return res.status(400).json({ message: err.message });
+  }
+  res.status(500).json({ message: "Internal Server Error" });
+});
 
 /**
  * @ratelimiter Global Rate Limiter
@@ -149,7 +166,6 @@ if (redisClient) {
     logger.warn("Failed to create rate limiter:", error.message);
   }
 }
-
 
 app.use((req, res, next) => {
   if (!rateLimiter) return next();
@@ -220,11 +236,17 @@ if (redisClient) {
       max: 10,
       standardHeaders: true,
       legacyHeaders: false,
-      keyGenerator: (req) => req.ip,
+
+      keyGenerator: (req) => ipKeyGenerator(req),
+
       handler: (req, res) => {
         logger.warn(`Sensitive endpoint rate limit exceeded for IP: ${req.ip}`);
-        res.status(429).json({ success: false, message: "Too many requests" });
+        res.status(429).json({
+          success: false,
+          message: "Too many requests",
+        });
       },
+
       store: new RedisStore({
         sendCommand: (...args) => redisClient.call(...args),
         skipFailedRequests: true,
@@ -267,8 +289,8 @@ app.get("/", (req, res) => {
 });
 
 app.use("/user", userAuthRouter);
+app.use("/vendor-profile", vendorProfileRouter);
 // app.use("/user-profile", userProfileRouter);
-// app.use("/vendor-profile", vendorProfileRouter);
 
 app.get("/health", (req, res) => {
   res.status(200).send("OK");
@@ -300,6 +322,8 @@ server.listen(SERVER_PORT, () => {
   logger.info(
     `Server is running on http://localhost:${SERVER_PORT} [ Enviroment : ${process.env.NODE_ENV}]`
   );
+  initKafkaProducer();
+  initKafkaConsumer();
 });
 
 const shutdown = async () => {
@@ -309,6 +333,7 @@ const shutdown = async () => {
   server.close(async () => {
     console.log("HTTP server closed.");
     await disconnectDB();
+    await disconnectKafka();
     process.exit(0);
   });
 

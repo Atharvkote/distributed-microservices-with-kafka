@@ -1,0 +1,37 @@
+services:
+  redis:
+    image: redis:7.2
+    restart: unless-stopped
+    ports:
+      - "6379:6379" # Redis server
+    volumes:
+      - redis_data:/data
+    networks: [vendex-infra]
+
+
+  # prom-server:
+  #   image: prom/prometheus
+  #   ports:
+  #     - 9090:9090
+  #   volumes:
+  #     - ../micro-services/prometheus-config.yml:/etc/prometheus/prometheus.yml
+      #  networks: [vendex-infra]
+
+
+  # grafana-client :
+  #     image : grafana/grafana-oss
+  #     ports : 
+  #       - 3000:3000
+# networks: [vendex-infra]
+
+  
+  # loki :
+  #     image : grafana/loki
+  #     ports :
+  #         - 3100:3100
+  # networks: [vendex-infra]
+
+
+
+volumes:
+  redis_data:

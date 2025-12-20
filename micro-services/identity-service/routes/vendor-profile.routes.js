@@ -1,16 +1,32 @@
-import { Router } from "express";
+import express from "express";
 import {
-  updateVendorProfileController,
-  deleteVendorProfileController,
-  completeVendorProfileController,
+  createVendorProfile,
+  updateVendorProfile,
+  completeVendorProfile,
+  getVendorProfile,
+  updateLogo,
+  updateBanner,
+  deleteVendorProfile,
+  getVendorProfileSummary,
 } from "../controllers/vendor-profile.controller.js";
+
+import { upload } from "../middleware/upload.middleware.js";
 import { authMiddleware } from "../middleware/auth.middleware.js";
 
-const vendorProfileRouter = Router();
+const router = express.Router();
 
-// vendor Profile Routes
-vendorProfileRouter.post("/complete-profile/:id", authMiddleware, completeVendorProfileController);
-vendorProfileRouter.post("/update-profile/:id", authMiddleware, updateVendorProfileController);
-vendorProfileRouter.post("/delete-profile/:id", authMiddleware, deleteVendorProfileController);
+router.use(authMiddleware);
 
-export default vendorProfileRouter;
+router.post("/", createVendorProfile);
+
+router.get("/", getVendorProfile);
+router.get("/summary/:vendorId", getVendorProfileSummary);
+
+router.patch("/", updateVendorProfile);
+router.patch("/complete", completeVendorProfile);
+router.patch("/logo", upload.single("logo"), updateLogo);
+router.patch("/banner", upload.single("banner"), updateBanner);
+
+router.delete("/", deleteVendorProfile);
+
+export default router;

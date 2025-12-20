@@ -18,10 +18,6 @@ const vendorProfileSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
-    password: {
-      type: String,
-      required: true,
-    },
     store_name: {
       type: String,
       required: true,
@@ -58,12 +54,19 @@ const vendorProfileSchema = new mongoose.Schema(
       },
     },
     email: {
+      // store contact email
       type: String,
       trim: true,
       lowercase: true,
       default: "",
     },
+    phone: {
+      // store contact phone
+      type: String,
+      default: "",
+    },
     url: {
+      // store website URL
       type: String,
       default: "",
     },
@@ -75,6 +78,16 @@ const vendorProfileSchema = new mongoose.Schema(
     ratings: {
       type: Number,
       default: 0,
+    },
+    outlet_address: {
+      residential_address: { type: String }, // A/p Address.....
+      country: { type: String },
+      state: { type: String },
+      city: { type: String },
+      pincode: {
+        type: String,
+        match: /^[0-9]{6}$/,
+      },
     },
   },
   { timestamps: true }
@@ -95,5 +108,9 @@ vendorProfileSchema.methods.getProfileSummary = function () {
   };
 };
 
-const VendorProfile = mongoose.model("VendorProfiles", vendorProfileSchema);
+const VendorProfile = mongoose.model(
+  "VendorProfiles",
+  vendorProfileSchema,
+  "vendor_profiles"
+);
 export default VendorProfile;

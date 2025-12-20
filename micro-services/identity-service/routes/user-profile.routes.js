@@ -1,27 +1,28 @@
 import { Router } from "express";
 import {
-  updateProfileController,
-  deleteProfileController,
-  completeProfileController,
-  profilePicController,
+  updateProfile,
+  deleteProfile,
+  completeProfile,
+  updateProfilePicture,
   getUserProfile,
 } from "../controllers/user-profile.controller.js";
 import { authMiddleware } from "../middleware/auth.middleware.js";
 
-const userProfileRouter = Router();
+const router = Router();
 
-// User Auth Routes
+router.use(authMiddleware);
 
 // POST
-userProfileRouter.post("/update-profile/:id", authMiddleware,updateProfileController);
-userProfileRouter.post("/update-profile/edit-profile-picture",authMiddleware, profilePicController);
-userProfileRouter.post("/delete-profile/:id",authMiddleware, deleteProfileController);
-userProfileRouter.post("/complete-profile/:id",authMiddleware, completeProfileController);
+router.post("/update-profile/:id", updateProfile);
+router.post("/delete-profile/:id", deleteProfile);
+
+// PATCH
+router.patch("/update-profile-picture", updateProfilePicture);
 
 // GET
-userProfileRouter.get("/fetch-summary",authMiddleware, getUserProfile);
+router.get("/fetch-summary", getUserProfile);
 
+// DELETE
+router.delete("/complete-profile/:id", completeProfile);
 
-
-
-export default userProfileRouter;
+export default router;

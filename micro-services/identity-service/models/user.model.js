@@ -2,6 +2,8 @@ import "dotenv/config";
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import VendorProfile from "./vendor.model.js";
+import fs from "fs";
 
 const userSchema = new mongoose.Schema(
   {
@@ -12,7 +14,7 @@ const userSchema = new mongoose.Schema(
         return !this.isAuthProviderConfiged;
       },
     },
-    
+
     full_name: {
       type: String,
       required: function () {
@@ -22,6 +24,17 @@ const userSchema = new mongoose.Schema(
     phone: { type: String, default: "" },
     profile_picture: { type: String, default: "" },
     isAuthProviderConfiged: { type: Boolean, default: false },
+
+    address: {
+      residential_address: { type: String }, // A/p Address.....
+      country: { type: String },
+      state: { type: String },
+      city: { type: String },
+      pincode: {
+        type: String,
+        match: /^[0-9]{6}$/,
+      },
+    },
   },
   { timestamps: true }
 );
@@ -63,11 +76,27 @@ userSchema.methods.comparePassword = async function (password) {
  * Signed with secret key in process.env.JWT_SECRET.
  */
 
-userSchema.methods.generateToken = function () {
+const PRIVATE_KEY = fs.readFileSync("keys/jwt_private.pem", "utf8");
+
+userSchema.methods.generateToken = async function () {
+  const vendorProfile = await VendorProfile.findOne({ user: this._id });
+
   return jwt.sign(
-    { userID: this._id.toString(), email: this.email },
-    process.env.JWT_SECRET,
-    { expiresIn: "7d" }
+    {
+      sub: this._id.toString(),
+      email: this.email,
+      full_name: this.full_name,
+
+      // vendor capability
+      isVendor: !!vendorProfile,
+      vendorId: vendorProfile?._id || null,
+    },
+    PRIVATE_KEY,
+    {
+      algorithm: "RS256",
+      expiresIn: "15m",
+      issuer: "identity-service",
+    }
   );
 };
 

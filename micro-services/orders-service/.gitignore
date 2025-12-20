@@ -10,6 +10,11 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+jwt_private.pem
+keys/jwt_private.pem
+jwt_public.pem
+keys/jwt_public.pem
+
 node_modules
 dist
 dist-ssr
