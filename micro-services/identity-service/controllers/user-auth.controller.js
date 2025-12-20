@@ -3,6 +3,11 @@ import UserModel from "../models/user.model.js";
 import bcrypt from "bcrypt";
 import logger from "../utils/logger.js";
 import { schemas } from "../validators/schemas.js";
+import {
+  publishUserCreated,
+  publishUserLogin,
+  publishUserLogout,
+} from "../kafka/kafka.producer.js";
 
 /**
  * @function SignUpController
@@ -47,11 +52,21 @@ export const SignUpController = async (req, res) => {
     });
 
     const savedUser = await newUser.save();
-    const token = savedUser.generateToken();
+    const token = await savedUser.generateToken();
 
     logger.info(
       `User account created successfully for ${savedUser.email} [Environment: ${process.env.NODE_ENV}]`
     );
+
+    // Kafka Event Streaming
+    const payload = {
+      _id: savedUser._id,
+      email: savedUser.email,
+      full_name: savedUser.full_name,
+      createdAt: savedUser.createdAt,
+    };
+
+    publishUserCreated(payload);
 
     return res.status(201).json({
       message: "User account created successfully",
@@ -110,10 +125,17 @@ export const LoginController = async (req, res) => {
       });
     }
 
-    const token = user.generateToken();
+    const token = await user.generateToken();
     logger.info(
       `User ${user.email} logged in successfully [Environment: ${process.env.NODE_ENV}]`
     );
+
+    // Kafka Event Streaming
+    const payload = {
+      userId: user._id,
+      ip: req.ip,
+    };
+    publishUserLogin(payload);
 
     return res.status(200).json({
       message: "User logged in successfully",
@@ -147,6 +169,13 @@ export const LoginController = async (req, res) => {
 export const LogOutController = async (req, res) => {
   try {
     res.clearCookie("token");
+
+    // Kafka Event Streaming
+    const payload = {
+      userId: req.user._id,
+    };
+    publishUserLogout(payload);
+
     logger.info(
       `User logged out successfully [Environment: ${process.env.NODE_ENV}]`
     );

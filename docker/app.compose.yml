@@ -1,17 +1,6 @@
 services:
-  redis:
-    image: redis/redis-stack:latest
-    container_name: redis-server-1
-    restart: unless-stopped
-    ports:
-      - "6379:6379" # Redis server
-      - "8002:8002" # RedisInsight UI
-    volumes:
-      - redis_data:/data
-
   kong:
     image: kong:3.1
-    container_name: "kong-api-gateway"
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
@@ -23,46 +12,56 @@ services:
       KONG_NGINX_HTTP_LOG_FORMAT: |
         main '$$remote_addr - $$remote_user [$$time_local] "$$request" $$status $$body_bytes_sent "$$http_referer" "$$http_user_agent" upstream:$$upstream_addr upstream_status:$$upstream_status upstream_response_time:$$upstream_response_time'
     ports:
-        - "8000:8000"
-        - "8001:8001"
+      - "8000:8000"
+      - "8001:8001"
     volumes:
-        - ./kong-manifest.yml:/usr/local/kong/declarative/kong.yml
-    command: [ "kong", "start", "--conf", "/etc/kong/kong.conf.default", "--v" ]
+      - ../micro-services/kong-manifest.yml:/usr/local/kong/declarative/kong.yml
+    command: ["kong", "start", "--conf", "/etc/kong/kong.conf.default", "--v"]
+    networks:
+      - vendex-infra
 
   identity-service:
-    build: ./identity-service
-    container_name: "identity-service"
+    build: ../micro-services/identity-service
     ports:
       - "3001:3001"
+    networks:
+      - vendex-infra
 
   order-service:
-    build: ./orders-service
-    container_name: "order-service"
+    build: ../micro-services/orders-service
     ports:
       - "3004:3004"
+    networks:
+      - vendex-infra
 
   catalog-service:
-    build: ./catalog-service
+    build: ../micro-services/catalog-service
     ports:
       - "3002:3002"
+    networks:
+      - vendex-infra
 
   analytics-service:
-    build: ./analytics-service
-    container_name: "analytics-service"
+    build: ../micro-services/analytics-service
     ports:
       - "3000:3000"
+    networks:
+      - vendex-infra
 
   messaging-service:
-    container_name: "messaging-service"
-    build: ./messaging-service
+    build: ../micro-services/messaging-service
     ports:
       - "3003:3003"
+    networks:
+      - vendex-infra
 
   payment-service:
-    container_name: "payment-service"
-    build: ./payment-service
+    build: ../micro-services/payment-service
     ports:
       - "3005:3005"
+    networks:
+      - vendex-infra
 
-volumes:
-  redis_data:
+networks:
+  vendex-infra:
+    driver: bridge

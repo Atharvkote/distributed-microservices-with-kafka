@@ -1,62 +1,120 @@
-import "dotenv/config";
-import cloudinary from "../configs/cloudinary.config.js";
-import logger from "../utils/logger.js";
 import UserModel from "../models/user.model.js";
+import { cloudinaryUpload } from "../utils/cloundnary.upload.js";
+import { z } from "zod";
+import {
+  updateProfileSchema,
+  completeProfileSchema,
+} from "../validators/schemas.js";
 
-export const updateProfileController = () => { };
-
-export const deleteProfileController = () => { };
-
-export const completeProfileController = () => { };
-
-export const profilePicController = async (req, res) => {
-  try {
-    const { profile_picture } = req.body;
-    if (!profile_picture) {
-      return res.status(400).json({ message: "Profile picture is required" });
-    }
-
-    const uploadResponse = await cloudinary.uploader.upload(profile_picture);
-    if (!uploadResponse || !uploadResponse.secure_url) {
-      logger.error("Failed to upload profile picture to Cloudinary");
-      return res
-        .status(500)
-        .json({ message: "Failed to upload profile picture" });
-    }
-    const userId = req.user._id;
-    const updatedUser = await UserModel.findByIdAndUpdate(
-      userId,
-      { profile_picture: uploadResponse.secure_url },
-      { new: true }
-    );
-
-    res.status(200).json({
-      user: updatedUser,
-      message: "Profile picture updated successfully",
-    });
-
-    if (!updatedUser) {
-      logger.error(`User not found with ID: ${req.user._id}`);
-      return res.status(404).json({ message: "User not found" });
-    }
-  } catch (error) {
-    logger.error(`Error in profileController :: `, error);
-    return res.status(500).json({ message: "Internal Server Error" });
+const validate = (schema, data) => {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    const errors = result.error.errors.map((e) => e.message);
+    throw new Error(errors.join(", "));
   }
+  return result.data;
 };
-
 
 export const getUserProfile = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const user = await UserModel.findById(userId).select("-password"); // Exclude Password
+    const user = await UserModel.findById(req.user.id).select("-password");
+
     if (!user) {
-      logger.error(`User not found with ID: ${userId}`);
       return res.status(404).json({ message: "User not found" });
     }
-    return res.status(200).json({ user });
-  } catch (error) {
-    logger.error(`Error in getUserProfile :: `, error);
-    return res.status(500).json({ message: "Internal Server Error" });
+
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const data = validate(updateProfileSchema, req.body);
+
+    const user = await UserModel.findByIdAndUpdate(userId, data, {
+      new: true,
+      runValidators: true,
+    }).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      message: "Profile updated successfully",
+      user,
+    });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+export const completeProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const data = validate(completeProfileSchema, req.body);
+
+    const user = await UserModel.findByIdAndUpdate(userId, data, {
+      new: true,
+      runValidators: true,
+    }).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      message: "Profile completed successfully",
+      user,
+    });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+export const updateProfilePicture = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Profile image is required" });
+    }
+
+    const upload = await cloudinaryUpload(req.file.buffer, {
+      folder: "users/profile",
+      publicId: `profile-${req.user.id}`,
+    });
+
+    const user = await UserModel.findByIdAndUpdate(
+      req.user.id,
+      { profile_picture: upload.secure_url },
+      { new: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      message: "Profile picture updated successfully",
+      profile_picture: user.profile_picture,
+    });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+export const deleteProfile = async (req, res) => {
+  try {
+    const user = await UserModel.findByIdAndDelete(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({ message: "User account deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };

@@ -25,3 +25,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+jwt_private.pem
+keys/jwt_private.pem
+jwt_public.pem
+keys/jwt_public.pem

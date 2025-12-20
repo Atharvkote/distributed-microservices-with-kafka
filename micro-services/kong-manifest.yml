@@ -4,9 +4,10 @@ services:
   - name: identity-service
     url: http://identity-service:3001
     routes:
-      - name: auth-route
+      - name: identity-route
         paths:
           - /auth
+        strip_path: true
 
   - name: analytics-service
     url: http://analytics-service:3000
@@ -14,13 +15,15 @@ services:
       - name: analytics-route
         paths:
           - /analytics
+        strip_path: true
 
   - name: messaging-service
-    url: http://messaging-service:3003
+    url: http://messaging-service:3002
     routes:
       - name: messaging-route
         paths:
           - /messages
+        strip_path: true
 
   - name: payment-service
     url: http://payment-service:3005
@@ -28,6 +31,7 @@ services:
       - name: payment-route
         paths:
           - /payments
+        strip_path: true
 
   - name: order-service
     url: http://order-service:3004
@@ -35,3 +39,4 @@ services:
       - name: order-route
         paths:
           - /orders
+        strip_path: true

@@ -28,14 +28,37 @@ import Redis from "ioredis";
 import cookieParser from "cookie-parser";
 import bodyParser from "body-parser";
 import client from "prom-client";
+import { Queue } from "bullmq";
+import { fileURLToPath } from "url";
+import { Server } from "socket.io";
 import { rateLimit } from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import { RateLimiterRedis } from "rate-limiter-flexible";
-import { fileURLToPath } from "url";
+import { createAdapter } from "@socket.io/redis-streams-adapter";
 
 // Connections & Configurations
 import { connectDB, disconnectDB } from "./configs/mongodb.config.js";
-import logger, { redisLogger } from "./utils/logger.js";
+import { initSocketIO } from "./socket-handlers/index.js";
+import logger, {
+  kafkaLogger,
+  redisLogger,
+  socketioLogger,
+} from "./utils/logger.js";
+import { startConsumption } from "./kafka/kafka.consumer.js";
+import {
+  kafka,
+  initKafkaConsumer,
+  initKafkaProducer,
+  getKafkaConsumer,
+  getKafkaProducer,
+  disconnectKafka,
+} from "./configs/kafka.config.js";
+
+// Middlwares
+import { authMiddleware } from "./middleware/auth.middleware.js";
+
+// Routes
+import notificationRouter from "./routes/notification.routes.js";
 
 // Configs
 await connectDB();
@@ -48,7 +71,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // CORS Whitelist
-const allowedOrigins = ["http://localhost:5173", "http://localhost:9090"];
+const allowedOrigins = [
+  "http://localhost:5173", // 5173 -> React Client
+  "http://localhost:9090", // 9090 -> promethus server
+  "example@domain.org.in",
+];
 
 // Create Redis client if REDIS_URL provided
 let redisClient = null;
@@ -71,6 +98,8 @@ if (!redisClient) {
     `Redis client connected successfully on ${process.env.REDIS_URL} , [ Enviroment : Docker ]`
   );
 }
+
+export { redisClient };
 
 /**
  * @middleware Parsing & Security
@@ -212,11 +241,17 @@ if (redisClient) {
       max: 10,
       standardHeaders: true,
       legacyHeaders: false,
-      keyGenerator: (req) => req.ip,
+
+      keyGenerator: (req) => ipKeyGenerator(req),
+
       handler: (req, res) => {
         logger.warn(`Sensitive endpoint rate limit exceeded for IP: ${req.ip}`);
-        res.status(429).json({ success: false, message: "Too many requests" });
+        res.status(429).json({
+          success: false,
+          message: "Too many requests",
+        });
       },
+
       store: new RedisStore({
         sendCommand: (...args) => redisClient.call(...args),
         skipFailedRequests: true,
@@ -242,6 +277,46 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(authMiddleware);
+
+/**
+ * @socketio Initialization & Broadcasting
+ *
+ * - Creates Socket.IO server instance attached to HTTP server with Redis adapter
+ *   for pub/sub scaling across multiple server instances.
+ * - Configures CORS to only allow requests from specified origins with selected HTTP methods.
+ * - Sets heartbeat options with `pingInterval` and `pingTimeout` to keep connections alive.
+ * - `allowEIO3` ensures backward compatibility with older Socket.IO v3 clients.
+ *
+ * After initialization:
+ * - Logs whether Socket.IO was successfully started.
+ * - Calls `initSocketIO()` to begin broadcasting user connections and
+ *   handling incoming socket events (defined in socket.config.js).
+ */
+
+const io = new Server(server, {
+  adapter: createAdapter(redisClient),
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "DELETE", "PATCH", "HEAD", "PUT"],
+    credentials: true,
+  },
+  pingInterval: 5000,
+  pingTimeout: 20000,
+  allowEIO3: true,
+});
+
+io
+  ? socketioLogger.info(
+      `Web Socket(Socket.io) Server Initialized! [ Enviroment : ${process.env.NODE_ENV}]`
+    )
+  : socketioLogger.error(
+      `Web Socket(Socket.io) Server Initialization Failed! [ Enviroment : ${process.env.NODE_ENV}]`
+    );
+
+// Broadcast Joined Users
+initSocketIO(io);
+
 /**
  * @router Routes
  *
@@ -262,6 +337,8 @@ app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
 
+app.use("/notification", notificationRouter);
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
@@ -269,6 +346,20 @@ app.use((req, res) => {
     message: "Route not found",
   });
 });
+
+/**
+ * @queue Emailing Queue for Mail Worker to function
+ *
+ */
+
+let emailQueue = null;
+if (redisClient) {
+  emailQueue = new Queue("email-queue", {
+    connection: redisClient,
+  });
+}
+
+export { emailQueue };
 
 /**
  * @mainserver Server Startup & Graceful Shutdown
@@ -288,12 +379,21 @@ server.listen(SERVER_PORT, () => {
   logger.info(
     `Server is running on http://localhost:${SERVER_PORT} [ Enviroment : ${process.env.NODE_ENV}]`
   );
+
+  // Starting Kafka Producers and Comsumers for streaming
+  initKafkaProducer();
+  initKafkaConsumer();
+  startConsumption();
 });
 
 const shutdown = async () => {
   logger.info(
     `Server shutting down on http://localhost:${SERVER_PORT} [ Enviroment : ${process.env.NODE_ENV}]`
   );
+
+  // Ending Kafka Stream
+  await disconnectKafka();
+
   server.close(async () => {
     console.log("HTTP server closed.");
     await disconnectDB();
