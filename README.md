@@ -1,4 +1,5 @@
-# Mutli-Vendor E-Commerce Website <i>(Micro Servies Architecture)</i>
+# Distributed Microservices with Apache Kafka
+## Multi-Vendor E-commerce Store - VenDeX
 
 > [!IMPORTANT]
 > This project is still under active development.
