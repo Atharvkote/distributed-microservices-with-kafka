@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vendex-ingress
+
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /catalog
+        pathType: Prefix
+
+        backend:
+          service:
+            name: catalog-service
+            port:
+              number: 80

@@ -1,0 +1,21 @@
+services:
+  kong:
+    image: kong:3.1
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_NGINX_HTTP_LOG_FORMAT: |
+        main '$$remote_addr - $$remote_user [$$time_local] "$$request" $$status $$body_bytes_sent "$$http_referer" "$$http_user_agent" upstream:$$upstream_addr upstream_status:$$upstream_status upstream_response_time:$$upstream_response_time'
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    volumes:
+      - ../micro-services/kong-manifest.yml:/usr/local/kong/declarative/kong.yml
+    command: ["kong", "start", "--conf", "/etc/kong/kong.conf.default", "--v"]
+    networks:
+      - vendex-infra

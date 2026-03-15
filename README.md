@@ -1,61 +1,234 @@
 # Mutli-Vendor E-Commerce Website <i>(Micro Servies Architecture)</i>
 
+## Technology Stack
 
+| Technology                                                                                     | Description                     | Role in Project                                                                   |
+| ---------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------- |
+| <div align="center">![React](https://skillicons.dev/icons?i=react)<br>React</div>              | Frontend UI library             | Builds a component-based, interactive user interface with efficient state updates |
+| <div align="center">![Vite](https://skillicons.dev/icons?i=vite)<br>Vite</div>                 | Frontend build tool             | Provides fast development server, optimized builds, and instant HMR               |
+| <div align="center">![Tailwind](https://skillicons.dev/icons?i=tailwind)<br>Tailwind CSS</div> | Utility-first CSS framework     | Enables responsive, consistent, and scalable UI styling                           |
+| <div align="center">![JavaScript](https://skillicons.dev/icons?i=js)<br>JavaScript</div>       | Programming language            | Core language used across frontend (React) and backend services                   |
+| <div align="center">![Node.js](https://skillicons.dev/icons?i=nodejs)<br>Node.js</div>         | JavaScript runtime              | Runs backend microservices and asynchronous event handlers                        |
+| <div align="center">![Express](https://skillicons.dev/icons?i=express)<br>Express</div>        | Backend web framework           | Handles REST APIs, middleware, authentication, and service routing                |
+| <div align="center"><br>Socket.IO</div>                                                        | Real-time communication library | Enables real-time notifications and messaging, scaled using Redis adapter         |
+| <div align="center">![MongoDB](https://skillicons.dev/icons?i=mongodb)<br>MongoDB</div>        | NoSQL database                  | Stores service-specific data with primary–replica setup for scalability           |
+| <div align="center">![Kafka](https://skillicons.dev/icons?i=kafka)<br>Apache Kafka</div>       | Event streaming platform        | Powers asynchronous, event-driven communication between microservices             |
+| <div align="center">![Redis](https://skillicons.dev/icons?i=redis)<br>Redis</div>              | In-memory datastore             | Used for Socket.IO pub/sub, caching, and real-time message fan-out                |
+| <div align="center">![Docker](https://skillicons.dev/icons?i=docker)<br>Docker</div>           | Containerization platform       | Containerizes microservices, Kafka, Redis, and infrastructure dependencies        |
+| <div align="center">![pnpm](https://skillicons.dev/icons?i=pnpm)<br>pnpm</div>                 | Package manager                 | Manages dependencies efficiently with faster installs and disk deduplication      |
+| <div align="center">![Postman](https://skillicons.dev/icons?i=postman)<br>Postman</div>        | API testing tool                | Used for testing and validating REST APIs during development                      |
+| <div align="center">![Git](https://skillicons.dev/icons?i=git)<br>Git</div>                    | Version control system          | Tracks source code changes and supports collaborative development                 |
+| <div align="center">![GitHub](https://skillicons.dev/icons?i=github)<br>GitHub</div>           | Code hosting platform           | Hosts the repository, manages collaboration, issues, and CI integrations          |
+
+## DevOps & Observability Stack
+
+| Technology                                                                                       | Description                    | Role in Project                                                 |
+| ------------------------------------------------------------------------------------------------ | ------------------------------ | --------------------------------------------------------------- |
+| <div align="center">![Jenkins](https://skillicons.dev/icons?i=jenkins)<br>Jenkins</div>          | CI/CD automation server        | Automates build, test, and deployment pipelines                 |
+| <div align="center">![Docker](https://skillicons.dev/icons?i=docker)<br>Docker Registry</div>    | Container image registry       | Stores and distributes versioned Docker images                  |
+| <div align="center">![Prometheus](https://skillicons.dev/icons?i=prometheus)<br>Prometheus</div> | Metrics monitoring system      | Collects time-series metrics from services and infrastructure   |
+| <div align="center">![Grafana](https://skillicons.dev/icons?i=grafana)<br>Grafana</div>          | Metrics visualization          | Provides dashboards for system health, performance, and usage   |
+| <div align="center">![Sentry](https://skillicons.dev/icons?i=sentry)<br>Sentry</div>             | Error tracking platform        | Captures runtime exceptions and provides real-time alerts       |
+| <div align="center"><br>Trivy</div>                                                              | Security vulnerability scanner | Scans Docker images for known vulnerabilities before deployment |
 
 # API Sever Architecture Diagram
 
 ```mermaid
-graph TD
+graph TB
 
-    4["User<br>External Actor"]
-    5["Kong API Gateway<br>API Gateway"]
-    6["MongoDB<br>Database"]
-    subgraph 1["Backend Microservices"]
-        10["Analytics Service<br>Node.js/Express"]
-        11["Catalog Service<br>Node.js/Express"]
-        12["Messaging Service<br>Node.js/Express"]
-        13["Orders Service<br>Node.js/Express"]
-        14["Payment Service<br>Node.js/Express"]
-        subgraph 2["Identity Service<br>Node.js/Express"]
-            15["server.js<br>Node.js/Express"]
-            16["Routes<br>Node.js/Express"]
-            17["Controllers<br>Node.js/Express"]
-            18["auth.middleware.js<br>Node.js"]
-            19["generateToken.js<br>Node.js"]
-            20["mongodb.config.js<br>Node.js"]
-            %% Edges at this level (grouped by source)
-            15["server.js<br>Node.js/Express"] -->|defines| 16["Routes<br>Node.js/Express"]
-            15["server.js<br>Node.js/Express"] -->|configures| 20["mongodb.config.js<br>Node.js"]
-            16["Routes<br>Node.js/Express"] -->|uses| 17["Controllers<br>Node.js/Express"]
-            16["Routes<br>Node.js/Express"] -->|applies| 18["auth.middleware.js<br>Node.js"]
-            17["Controllers<br>Node.js/Express"] -->|generates| 19["generateToken.js<br>Node.js"]
-        end
-    end
-    subgraph 3["Client Application"]
-        7["main.jsx<br>React/JavaScript"]
-        8["App.jsx<br>React/JavaScript"]
-        9["Client Components<br>React/JavaScript"]
-        %% Edges at this level (grouped by source)
-        7["main.jsx<br>React/JavaScript"] -->|renders| 8["App.jsx<br>React/JavaScript"]
-        8["App.jsx<br>React/JavaScript"] -->|uses| 9["Client Components<br>React/JavaScript"]
-    end
-    %% Edges at this level (grouped by source)
-    5["Kong API Gateway<br>API Gateway"] -->|routes to| 2["Identity Service<br>Node.js/Express"]
-    5["Kong API Gateway<br>API Gateway"] -->|routes to| 10["Analytics Service<br>Node.js/Express"]
-    5["Kong API Gateway<br>API Gateway"] -->|routes to| 11["Catalog Service<br>Node.js/Express"]
-    5["Kong API Gateway<br>API Gateway"] -->|routes to| 12["Messaging Service<br>Node.js/Express"]
-    5["Kong API Gateway<br>API Gateway"] -->|routes to| 13["Orders Service<br>Node.js/Express"]
-    5["Kong API Gateway<br>API Gateway"] -->|routes to| 14["Payment Service<br>Node.js/Express"]
-    4["User<br>External Actor"] -->|accesses| 3["Client Application"]
-    3["Client Application"] -->|requests via| 5["Kong API Gateway<br>API Gateway"]
-    2["Identity Service<br>Node.js/Express"] -->|persists data to| 6["MongoDB<br>Database"]
-    10["Analytics Service<br>Node.js/Express"] -->|persists data to| 6["MongoDB<br>Database"]
-    11["Catalog Service<br>Node.js/Express"] -->|persists data to| 6["MongoDB<br>Database"]
-    12["Messaging Service<br>Node.js/Express"] -->|persists data to| 6["MongoDB<br>Database"]
-    13["Orders Service<br>Node.js/Express"] -->|persists data to| 6["MongoDB<br>Database"]
-    14["Payment Service<br>Node.js/Express"] -->|persists data to| 6["MongoDB<br>Database"]
+%% =========================
+%% CLIENT & GATEWAY
+%% =========================
+U["User"]
+C["Client App<br>React"]
+K["Kong API Gateway"]
+
+U --> C --> K
+
+%% =========================
+%% CORE SERVICES (2×2 GRID)
+%% =========================
+subgraph CORE["Core Microservices (Vertical · 2×2 Grid)"]
+direction LR
+
+%% -------- Identity --------
+subgraph ID["Identity Service"]
+direction TB
+IDS["server.js"]
+IDR["Routes"]
+IDC["Controllers"]
+IDM["Auth Middleware"]
+IDU["Utils"]
+IDDB["Primary DB"]
+IDDBR["Replica DB"]
+
+IDS --> IDR --> IDC --> IDU
+IDR --> IDM
+IDC --> IDDB --> IDDBR
+end
+
+%% -------- Catalog --------
+subgraph CAT["Catalog Service"]
+direction TB
+CS["server.js"]
+CR["Routes"]
+CC["Controllers"]
+CM["Middleware"]
+CU["Utils"]
+CDB["Primary DB"]
+CDBR["Replica DB"]
+
+CS --> CR --> CC --> CU
+CR --> CM
+CC --> CDB --> CDBR
+end
+
+%% -------- Orders --------
+subgraph ORD["Orders Service"]
+direction TB
+OS["server.js"]
+OR["Routes"]
+OC["Controllers"]
+OM["Middleware"]
+OU["Utils"]
+ODB["Primary DB"]
+ODBR["Replica DB"]
+
+OS --> OR --> OC --> OU
+OR --> OM
+OC --> ODB --> ODBR
+end
+
+%% -------- Payment --------
+subgraph PAY["Payment Service"]
+direction TB
+PS["server.js"]
+PR["Routes"]
+PC["Controllers"]
+PM["Middleware"]
+PU["Utils"]
+PDB["Primary DB"]
+PDBR["Replica DB"]
+
+PS --> PR --> PC --> PU
+PR --> PM
+PC --> PDB --> PDBR
+end
+end
+
+%% =========================
+%% MESSAGING SERVICE
+%% =========================
+subgraph MSG["Messaging Service (Real-Time)"]
+direction TB
+MS["server.js"]
+MAPI["REST APIs"]
+MSOCK["Socket.IO Server"]
+MREDIS["Redis Adapter"]
+MDB["Primary DB"]
+MDBR["Replica DB"]
+
+MS --> MAPI
+MS --> MSOCK --> MREDIS
+MSOCK --> MDB --> MDBR
+end
+
+%% =========================
+%% ANALYTICS SERVICE (ASIDE)
+%% =========================
+subgraph ANA["Analytics Service (Read Optimized)"]
+direction TB
+AS["server.js"]
+AR["Routes"]
+AC["Controllers"]
+ADB["Analytics DB Primary"]
+ADBR["Analytics DB Replica"]
+
+AS --> AR --> AC
+AC --> ADB --> ADBR
+
+%% Reads from replicas
+AC --> IDDBR
+AC --> CDBR
+AC --> ODBR
+AC --> PDBR
+AC --> MDBR
+end
+
+%% =========================
+%% GATEWAY ROUTING
+%% =========================
+K --> ID
+K --> CAT
+K --> ORD
+K --> PAY
+K --> MSG
+K --> ANA
+
+
+%% =========================
+%% STYLING (style NodeId)
+%% =========================
+
+%% Client & Gateway
+style U fill:#1f2937,color:#ffffff
+style C fill:#1f2937,color:#ffffff
+style K fill:#111827,color:#ffffff
+
+%% Services
+style IDS fill:#2563EB,color:#ffffff
+style IDR fill:#2563EB,color:#ffffff
+style IDC fill:#2563EB,color:#ffffff
+style IDM fill:#2563EB,color:#ffffff
+style IDU fill:#2563EB,color:#ffffff
+
+style CS fill:#2563EB,color:#ffffff
+style CR fill:#2563EB,color:#ffffff
+style CC fill:#2563EB,color:#ffffff
+style CM fill:#2563EB,color:#ffffff
+style CU fill:#2563EB,color:#ffffff
+
+style OS fill:#2563EB,color:#ffffff
+style OR fill:#2563EB,color:#ffffff
+style OC fill:#2563EB,color:#ffffff
+style OM fill:#2563EB,color:#ffffff
+style OU fill:#2563EB,color:#ffffff
+
+style PS fill:#2563EB,color:#ffffff
+style PR fill:#2563EB,color:#ffffff
+style PC fill:#2563EB,color:#ffffff
+style PM fill:#2563EB,color:#ffffff
+style PU fill:#2563EB,color:#ffffff
+
+%% Messaging
+style MS fill:#f97316,color:#ffffff
+style MAPI fill:#f97316,color:#ffffff
+style MSOCK fill:#f97316,color:#ffffff
+style MREDIS fill:#f97316,color:#ffffff
+
+%% Analytics
+style AS fill:#0EA5E9,color:#ffffff
+style AR fill:#0EA5E9,color:#ffffff
+style AC fill:#0EA5E9,color:#ffffff
+
+%% Databases
+style IDDB fill:#EF4444,color:#ffffff
+style CDB fill:#EF4444,color:#ffffff
+style ODB fill:#EF4444,color:#ffffff
+style PDB fill:#EF4444,color:#ffffff
+style MDB fill:#EF4444,color:#ffffff
+style ADB fill:#EF4444,color:#ffffff
+
+style IDDBR fill:#FB7185,color:#ffffff
+style CDBR fill:#FB7185,color:#ffffff
+style ODBR fill:#FB7185,color:#ffffff
+style PDBR fill:#FB7185,color:#ffffff
+style MDBR fill:#FB7185,color:#ffffff
+style ADBR fill:#FB7185,color:#ffffff
 
 ```
+
+## Kafka Event Routing
 
 ```mermaid
 flowchart LR
@@ -340,8 +513,7 @@ class B3E2 partition
 
 ```
 
-
-## Docker Enviromnet 
+## Docker Enviromnet
 
 ![Images](https://res.cloudinary.com/dgz7hqbl9/image/upload/v1764528871/Screenshot_2025-12-01_000521_kfbt0k.png)
 
@@ -353,3 +525,103 @@ class B3E2 partition
 
 ![Image](https://res.cloudinary.com/dgz7hqbl9/image/upload/v1764528871/Screenshot_2025-12-01_000802_algvb6.png)
 
+## ER Diagram
+
+```mermaid
+erDiagram
+    USERS {
+        ObjectId _id PK
+        string email
+        string password
+        string full_name
+
+    }
+
+    VENDOR_PROFILES {
+        ObjectId _id PK
+        ObjectId user FK
+        string store_name
+        string profile_picture_url
+        string banner_url
+        
+    }
+
+    CATEGORIES {
+        ObjectId _id PK
+        string name
+        string slug
+        ObjectId parent FK
+        number level
+        string path
+        boolean isActive
+        number sortOrder
+        string attributes
+    }
+
+    PRODUCTS {
+        ObjectId _id PK
+        ObjectId vendor FK
+        ObjectId category FK
+        string title
+        string description
+        string brand
+        boolean isActive
+        number avgRating
+        number ratingCount
+        string tags
+        string seo
+        string createdAt
+        string updatedAt
+    }
+
+    PRODUCT_VARIANTS {
+        ObjectId _id PK
+        ObjectId product FK
+        string sku
+        string attributes
+        string price
+        string weight
+        string images
+        boolean isActive
+    }
+
+    INVENTORY {
+        ObjectId _id PK
+        ObjectId variant FK
+        number stock
+        number reserved
+        number lowStockThreshold
+    }
+
+    REVIEWS {
+        ObjectId _id PK
+        ObjectId product FK
+        ObjectId user FK
+        number rating
+        string comment
+        boolean isVerifiedPurchase
+        string createdAt
+    }
+
+    PINNED_REVIEWS {
+        ObjectId _id PK
+        ObjectId review FK
+        ObjectId vendor FK
+        ObjectId user FK
+        string createdAt
+    }
+
+    %% RELATIONSHIPS
+    USERS ||--|| VENDOR_PROFILES : owns
+    VENDOR_PROFILES ||--o{ PRODUCTS : owns
+    CATEGORIES ||--o{ PRODUCTS : classifies
+    CATEGORIES ||--o{ CATEGORIES : parent_of
+    PRODUCTS ||--o{ PRODUCT_VARIANTS : has
+    PRODUCT_VARIANTS ||--|| INVENTORY : tracked_by
+    PRODUCTS ||--o{ REVIEWS : receives
+    USERS ||--o{ REVIEWS : writes
+    REVIEWS ||--o| PINNED_REVIEWS : pinned
+    VENDOR_PROFILES ||--o{ PINNED_REVIEWS : showcases
+    USERS ||--o{ PINNED_REVIEWS : pins
+
+```
