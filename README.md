@@ -1,35 +1,7 @@
 # Mutli-Vendor E-Commerce Website <i>(Micro Servies Architecture)</i>
 
-## Technology Stack
-
-| Technology                                                                                     | Description                     | Role in Project                                                                   |
-| ---------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------- |
-| <div align="center">![React](https://skillicons.dev/icons?i=react)<br>React</div>              | Frontend UI library             | Builds a component-based, interactive user interface with efficient state updates |
-| <div align="center">![Vite](https://skillicons.dev/icons?i=vite)<br>Vite</div>                 | Frontend build tool             | Provides fast development server, optimized builds, and instant HMR               |
-| <div align="center">![Tailwind](https://skillicons.dev/icons?i=tailwind)<br>Tailwind CSS</div> | Utility-first CSS framework     | Enables responsive, consistent, and scalable UI styling                           |
-| <div align="center">![JavaScript](https://skillicons.dev/icons?i=js)<br>JavaScript</div>       | Programming language            | Core language used across frontend (React) and backend services                   |
-| <div align="center">![Node.js](https://skillicons.dev/icons?i=nodejs)<br>Node.js</div>         | JavaScript runtime              | Runs backend microservices and asynchronous event handlers                        |
-| <div align="center">![Express](https://skillicons.dev/icons?i=express)<br>Express</div>        | Backend web framework           | Handles REST APIs, middleware, authentication, and service routing                |
-| <div align="center"><br>Socket.IO</div>                                                        | Real-time communication library | Enables real-time notifications and messaging, scaled using Redis adapter         |
-| <div align="center">![MongoDB](https://skillicons.dev/icons?i=mongodb)<br>MongoDB</div>        | NoSQL database                  | Stores service-specific data with primary–replica setup for scalability           |
-| <div align="center">![Kafka](https://skillicons.dev/icons?i=kafka)<br>Apache Kafka</div>       | Event streaming platform        | Powers asynchronous, event-driven communication between microservices             |
-| <div align="center">![Redis](https://skillicons.dev/icons?i=redis)<br>Redis</div>              | In-memory datastore             | Used for Socket.IO pub/sub, caching, and real-time message fan-out                |
-| <div align="center">![Docker](https://skillicons.dev/icons?i=docker)<br>Docker</div>           | Containerization platform       | Containerizes microservices, Kafka, Redis, and infrastructure dependencies        |
-| <div align="center">![pnpm](https://skillicons.dev/icons?i=pnpm)<br>pnpm</div>                 | Package manager                 | Manages dependencies efficiently with faster installs and disk deduplication      |
-| <div align="center">![Postman](https://skillicons.dev/icons?i=postman)<br>Postman</div>        | API testing tool                | Used for testing and validating REST APIs during development                      |
-| <div align="center">![Git](https://skillicons.dev/icons?i=git)<br>Git</div>                    | Version control system          | Tracks source code changes and supports collaborative development                 |
-| <div align="center">![GitHub](https://skillicons.dev/icons?i=github)<br>GitHub</div>           | Code hosting platform           | Hosts the repository, manages collaboration, issues, and CI integrations          |
-
-## DevOps & Observability Stack
-
-| Technology                                                                                       | Description                    | Role in Project                                                 |
-| ------------------------------------------------------------------------------------------------ | ------------------------------ | --------------------------------------------------------------- |
-| <div align="center">![Jenkins](https://skillicons.dev/icons?i=jenkins)<br>Jenkins</div>          | CI/CD automation server        | Automates build, test, and deployment pipelines                 |
-| <div align="center">![Docker](https://skillicons.dev/icons?i=docker)<br>Docker Registry</div>    | Container image registry       | Stores and distributes versioned Docker images                  |
-| <div align="center">![Prometheus](https://skillicons.dev/icons?i=prometheus)<br>Prometheus</div> | Metrics monitoring system      | Collects time-series metrics from services and infrastructure   |
-| <div align="center">![Grafana](https://skillicons.dev/icons?i=grafana)<br>Grafana</div>          | Metrics visualization          | Provides dashboards for system health, performance, and usage   |
-| <div align="center">![Sentry](https://skillicons.dev/icons?i=sentry)<br>Sentry</div>             | Error tracking platform        | Captures runtime exceptions and provides real-time alerts       |
-| <div align="center"><br>Trivy</div>                                                              | Security vulnerability scanner | Scans Docker images for known vulnerabilities before deployment |
+> [!IMPORTANT]
+> This project is still under active development.
 
 # API Sever Architecture Diagram
 
