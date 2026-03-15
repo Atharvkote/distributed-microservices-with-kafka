@@ -234,13 +234,6 @@ This project demonstrates:
 
 It is intentionally **not over‑simplified**, making it a strong representation of modern backend engineering practices.
 
-## Future Enhancements
-
-* Auth and rate‑limit plugins in Kong
-* Prometheus + Grafana observability
-* Distributed tracing
-* Schema registry for Kafka
-* CI/CD pipeline with Jenkins
 
 ## Conclusion
 
