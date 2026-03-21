@@ -10,6 +10,11 @@ import {
   getVariantsByProductZod,
   deleteVariantZod,
 } from "../validators/schema.js";
+import {
+  publishVariantCreated,
+  publishVariantUpdated,
+  publishVariantDeleted,
+} from "../kafka/kafka.producer.js";
 
 export const createProductVariant = async (req, res) => {
   const session = await mongoose.startSession();
@@ -110,6 +115,10 @@ export const createProductVariant = async (req, res) => {
     );
 
     await session.commitTransaction();
+    
+    // Publish variant created event
+    await publishVariantCreated(variant);
+    
     res.status(201).json({
       message: "Variant created successfully",
       variant,
@@ -214,6 +223,9 @@ export const updateProductVariant = async (req, res) => {
     }
 
     await variant.save();
+
+    // Publish variant updated event
+    await publishVariantUpdated(variant);
 
     res.status(200).json({
       message: "Variant updated successfully",
@@ -350,6 +362,10 @@ export const deleteProductVariant = async (req, res) => {
         return res.status(404).json({ message: "Variant not found" });
       }
 
+      // Publish variant deleted event
+      await publishVariantDeleted(variantId, variant.product);
+      
+      
       // Note: We don't delete inventory, just mark variant as inactive
       await session.commitTransaction();
       res.status(200).json({

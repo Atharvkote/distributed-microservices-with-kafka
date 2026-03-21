@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import { Heart, ShoppingCart, Star, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { useCartStore } from '@/store/cartStore';
+import { toast } from 'sonner';
 
 interface ProductCardProps {
   id: string;
@@ -26,11 +27,25 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const addItem = useCartStore((s) => s.addItem);
 
-  const discount = originalPrice ? Math.round(((originalPrice - price) / originalPrice) * 100) : 0;
+  const discount = originalPrice
+    ? Math.round(((originalPrice - price) / originalPrice) * 100)
+    : 0;
+
+  const handleAddToCart = useCallback(() => {
+    addItem({ id: `ci-${id}`, productId: id, name, price, image, vendorName });
+    toast.success(`"${name}" added to cart`, { duration: 2000 });
+  }, [addItem, id, name, price, image, vendorName]);
+
+  const handleWishlist = useCallback(() => {
+    setIsWishlisted((prev) => !prev);
+    toast(isWishlisted ? 'Removed from wishlist' : 'Added to wishlist', {
+      duration: 1500,
+    });
+  }, [isWishlisted]);
 
   return (
     <Card
-      className="glass border-border/50 overflow-hidden group hover:neon-glow transition-all duration-300"
+      className="glass border-border/50 overflow-hidden group hover:brand-glow hover:border-primary/30 transition-all duration-300"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -39,33 +54,39 @@ const ProductCard: React.FC<ProductCardProps> = ({
         <img
           src={image}
           alt={name}
-          className="object-cover w-full h-full group-hover:scale-110 transition-transform duration-500"
+          className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
           loading="lazy"
         />
 
         {/* Overlay actions */}
-        <div className={cn(
-          'absolute inset-0 bg-black/40 flex items-center justify-center gap-3 transition-opacity duration-300',
-          isHovered ? 'opacity-100' : 'opacity-0'
-        )}>
+        <div
+          className={cn(
+            'absolute inset-0 bg-black/35 flex items-center justify-center gap-3 transition-opacity duration-300',
+            isHovered ? 'opacity-100' : 'opacity-0'
+          )}
+        >
           <Button
             size="icon"
             variant="secondary"
-            className="h-10 w-10 rounded-full glass-strong border-white/20 hover:neon-glow"
-            onClick={() => addItem({ id: `ci-${id}`, productId: id, name, price, image, vendorName })}
+            className="h-10 w-10 rounded-full bg-white/20 backdrop-blur border-white/30 text-white hover:bg-white/35"
+            onClick={handleAddToCart}
           >
             <ShoppingCart className="h-4 w-4" />
           </Button>
           <Link to={`/products/${id}`}>
-            <Button size="icon" variant="secondary" className="h-10 w-10 rounded-full glass-strong border-white/20 hover:neon-glow">
+            <Button
+              size="icon"
+              variant="secondary"
+              className="h-10 w-10 rounded-full bg-white/20 backdrop-blur border-white/30 text-white hover:bg-white/35"
+            >
               <Eye className="h-4 w-4" />
             </Button>
           </Link>
         </div>
 
-        {/* Badges */}
+        {/* Discount badge */}
         {discount > 0 && (
-          <Badge className="absolute top-3 left-3 gradient-primary border-0 text-[10px] font-bold">
+          <Badge className="absolute top-3 left-3 gradient-primary text-primary-foreground border-0 text-[10px] font-bold">
             -{discount}%
           </Badge>
         )}
@@ -74,20 +95,24 @@ const ProductCard: React.FC<ProductCardProps> = ({
         <Button
           size="icon"
           variant="ghost"
-          className="absolute top-3 right-3 h-8 w-8 rounded-full glass-strong border-white/10"
-          onClick={() => setIsWishlisted(!isWishlisted)}
+          className="absolute top-3 right-3 h-8 w-8 rounded-full bg-white/15 backdrop-blur border-white/10 hover:bg-white/30"
+          onClick={handleWishlist}
         >
-          <Heart className={cn('h-4 w-4', isWishlisted ? 'fill-red-500 text-red-500' : 'text-white')} />
+          <Heart
+            className={cn('h-4 w-4', isWishlisted ? 'fill-red-500 text-red-500' : 'text-white')}
+          />
         </Button>
       </div>
 
       <CardContent className="p-4 space-y-2">
         {/* Category */}
-        <p className="text-[10px] font-medium text-primary uppercase tracking-wider">{category}</p>
+        <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">{category}</p>
 
         {/* Name */}
         <Link to={`/products/${id}`}>
-          <h3 className="font-semibold text-sm line-clamp-1 hover:text-primary transition-colors">{name}</h3>
+          <h3 className="font-semibold text-sm line-clamp-1 hover:text-primary transition-colors">
+            {name}
+          </h3>
         </Link>
 
         {/* Vendor */}
@@ -100,7 +125,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
               key={i}
               className={cn(
                 'h-3 w-3',
-                i < Math.floor(rating) ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'
+                i < Math.floor(rating)
+                  ? 'fill-amber-400 text-amber-400'
+                  : 'text-muted-foreground/30'
               )}
             />
           ))}
@@ -111,7 +138,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
         <div className="flex items-center gap-2 pt-1">
           <span className="text-lg font-bold">${price.toFixed(2)}</span>
           {originalPrice && (
-            <span className="text-sm text-muted-foreground line-through">${originalPrice.toFixed(2)}</span>
+            <span className="text-sm text-muted-foreground line-through">
+              ${originalPrice.toFixed(2)}
+            </span>
           )}
         </div>
       </CardContent>

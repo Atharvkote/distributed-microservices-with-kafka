@@ -3,7 +3,17 @@ import slugify from "slugify";
 import { Product } from "../models/product.model.js";
 import { ProductVariant } from "../models/variant.model.js";
 import { Category } from "../models/category.model.js";
-import { createProductZod, updateProductZod, getProductZod, deleteProductZod } from "../validators/schema.js";
+import {
+  createProductZod,
+  updateProductZod,
+  getProductZod,
+  deleteProductZod,
+} from "../validators/schema.js";
+import {
+  publishProductCreated,
+  publishProductUpdated,
+  publishProductDeleted,
+} from "../kafka/kafka.producer.js";
 
 export const createProduct = async (req, res) => {
   try {
@@ -15,7 +25,7 @@ export const createProduct = async (req, res) => {
         errors: parsed.error.errors,
       });
     }
-// console.log("Whats worng", req.user);
+    // console.log("Whats worng", req.user);
 
     if (!req.user?.vendorId) {
       return res.status(401).json({ message: "Vendor not authenticated" });
@@ -50,6 +60,9 @@ export const createProduct = async (req, res) => {
         metaDescription: seo?.metaDescription || description.substring(0, 160),
       },
     });
+
+    // Publish product created event
+    await publishProductCreated(product);
 
     return res.status(201).json({
       message: "Product created successfully",
@@ -144,7 +157,9 @@ export const updateProduct = async (req, res) => {
         isActive: true,
       });
       if (!categoryExists) {
-        return res.status(400).json({ message: "Invalid or inactive category" });
+        return res
+          .status(400)
+          .json({ message: "Invalid or inactive category" });
       }
     }
 
@@ -164,7 +179,7 @@ export const updateProduct = async (req, res) => {
         vendor: vendorId,
       },
       { $set: updates },
-      { new: true }
+      { new: true },
     );
 
     if (!product) {
@@ -176,6 +191,9 @@ export const updateProduct = async (req, res) => {
       product.title = parsed.data.body.title;
       await product.save();
     }
+
+    // Publish product updated event
+    await publishProductUpdated(product);
 
     res.status(200).json({
       message: "Product updated successfully",
@@ -216,7 +234,7 @@ export const deleteProduct = async (req, res) => {
           vendor: vendorId,
         },
         { isActive: false },
-        { new: true, session }
+        { new: true, session },
       );
 
       if (!product) {
@@ -228,10 +246,14 @@ export const deleteProduct = async (req, res) => {
       await ProductVariant.updateMany(
         { product: productId },
         { isActive: false },
-        { session }
+        { session },
       );
 
       await session.commitTransaction();
+
+      // Publish product deleted event
+      await publishProductDeleted(productId);
+
       res.status(200).json({
         message: "Product and its variants disabled successfully",
       });
@@ -338,7 +360,7 @@ export const getPublicProducts = async (req, res) => {
     ]);
 
     const priceMap = Object.fromEntries(
-      prices.map((p) => [p._id.toString(), p])
+      prices.map((p) => [p._id.toString(), p]),
     );
 
     const result = products.map((p) => ({

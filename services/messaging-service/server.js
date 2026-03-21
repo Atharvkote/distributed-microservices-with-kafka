@@ -45,6 +45,8 @@ import logger, {
   socketioLogger,
 } from "./utils/logger.js";
 import { startConsumption } from "./kafka/kafka.consumer.js";
+import { startNotificationConsumer } from "./kafka/notification.consumer.js";
+import { disconnectRedisSubscriber } from "./config/redis-subscriber.config.js";
 import {
   kafka,
   initKafkaConsumer,
@@ -359,7 +361,24 @@ if (redisClient) {
   });
 }
 
-export { emailQueue };
+let notificationQueue = null;
+if (redisClient) {
+  notificationQueue = new Queue("notificationQueue", {
+    connection: redisClient,
+    defaultJobOptions: {
+      attempts: 5,
+      backoff: { type: "exponential", delay: 3000 },
+      removeOnComplete: true,
+      removeOnFail: false,
+    },
+  });
+} else {
+  logger.warn(
+    "Redis client not available - notificationQueue will be disabled"
+  );
+}
+
+export { emailQueue, notificationQueue };
 
 /**
  * @mainserver Server Startup & Graceful Shutdown
@@ -384,6 +403,7 @@ server.listen(SERVER_PORT, () => {
   initKafkaProducer();
   initKafkaConsumer();
   startConsumption();
+  startNotificationConsumer();
 });
 
 const shutdown = async () => {
@@ -393,6 +413,8 @@ const shutdown = async () => {
 
   // Ending Kafka Stream
   await disconnectKafka();
+
+  await disconnectRedisSubscriber();
 
   server.close(async () => {
     console.log("HTTP server closed.");

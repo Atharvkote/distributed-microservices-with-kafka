@@ -17,7 +17,7 @@ export const getNotifications = async (req, res) => {
     const skip = (page - 1) * limit;
 
     const query = {
-      $or: [{ scope: "GLOBAL" }, { scope: "USER", id }],
+      $or: [{ scope: "GLOBAL" }, { scope: "USER", userId: id }],
     };
 
     const [notifications, total] = await Promise.all([
@@ -59,15 +59,18 @@ export const systemNotification = async (data) => {
   }
 };
 
-export const userNotification = async (data) => {
-  notifyUser(data.userId, data);
+export const userNotification = async (userId, data) => {
+  const notificationData = {
+    ...data,
+    userId,
+    scope: "USER",
+  };
+  
+  notifyUser(userId, notificationData);
 
   try {
-    await Notification.create({
-      ...data,
-      scope: "USER",
-    });
+    await Notification.create(notificationData);
   } catch (err) {
-    console.error("Notification persistence failed:", err.message);
+    logger.error("Notification persistence failed:", err.message);
   }
 };
