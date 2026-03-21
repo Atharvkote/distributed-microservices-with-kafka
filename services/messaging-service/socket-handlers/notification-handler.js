@@ -6,6 +6,5 @@ export const notifyAll = (payload) => {
 
 export const notifyUser = (userId, payload) => {
   if (!userId) return;
-  console.log(userId);
   getIO().to(`user:${userId}`).emit("notification", payload);
 };

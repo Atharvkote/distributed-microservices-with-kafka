@@ -22,13 +22,13 @@ const MainLayout: React.FC = () => {
   const { toggleMobileMenu } = useUIStore();
 
   return (
-    <div className="min-h-screen flex flex-col gradient-dark">
+    <div className="min-h-screen flex flex-col bg-background">
       {/* Navbar */}
       <header className="sticky top-0 z-50 h-16 border-b border-border/50 glass">
         <div className="max-w-7xl mx-auto flex items-center justify-between h-full px-4 md:px-6">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group">
-            <div className="h-9 w-9 rounded-lg gradient-primary flex items-center justify-center group-hover:neon-glow transition-all duration-300">
+            <div className="h-9 w-9 rounded-lg gradient-primary flex items-center justify-center group-hover:brand-glow transition-all duration-300">
               <Package className="h-5 w-5 text-white" />
             </div>
             <span className="font-bold text-lg  hidden sm:block tracking-widest">VenDeX</span>
@@ -108,7 +108,7 @@ const MainLayout: React.FC = () => {
               </DropdownMenu>
             ) : (
               <Link to="/login">
-                <Button size="sm" className="gradient-primary hover:neon-glow transition-all">
+                <Button size="sm" variant="brand">
                   Sign In
                 </Button>
               </Link>

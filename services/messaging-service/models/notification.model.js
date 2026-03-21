@@ -4,7 +4,7 @@ const notificationSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ["SYSTEM", "ORDER", "PAYMENT", "INFO"],
+      enum: ["SYSTEM", "ORDER", "PAYMENT", "INFO", "ALERT", "WARNING"],
       required: true,
     },
 
@@ -25,8 +25,7 @@ const notificationSchema = new mongoose.Schema(
     },
 
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Users",
+      type: String,
       required: function () {
         return this.scope === "USER";
       },
@@ -36,12 +35,18 @@ const notificationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    sourceEventId: {
+      type: String,
+      index: true,
+      sparse: true,
+    },
   },
   { timestamps: true }
 );
 
 notificationSchema.index({ scope: 1, createdAt: -1 });
 notificationSchema.index({ userId: 1, scope: 1, createdAt: -1 });
+notificationSchema.index({ sourceEventId: 1 }, { unique: true, sparse: true });
 
 export const Notification = mongoose.model(
   "Notification",

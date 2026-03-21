@@ -2,11 +2,11 @@
   "name": "workers",
   "version": "1.0.0",
   "description": "",
-  "main": "email.worker.js",
+  "main": "notification.worker.js",
   "type": "module",
   "scripts": {
-    "start": "node email.worker.js",
-    "dev": "npx nodemon email.worker.js"
+    "start": "node notification.worker.js",
+    "dev": "npx nodemon notification.worker.js"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +19,7 @@
     "ioredis": "^5.8.2",
     "nodemailer": "^7.0.11",
     "winston": "^3.19.0",
-    "winston-loki": "^6.1.3"
+    "winston-loki": "^6.1.3",
+    "zod": "^4.1.13"
   }
 }

@@ -17,7 +17,7 @@ if (!fs.existsSync(logDirectory)) {
 
 const colorMap = {
   "Redis Server": chalk.red.bold,
-  "Mail Worker": chalk.cyan.bold,
+  "Notification Worker": chalk.cyan.bold,
 };
 
 const prettyPrint = winston.format.printf((info) => {
@@ -29,7 +29,7 @@ const prettyPrint = winston.format.printf((info) => {
     : "";
 
   return `${colorFn(
-    `[ ${server_name || "Mail Worker"} ]`
+    `[ ${server_name || "Notification Worker"} ]`
   )} :: ${timestamp} ${level}: ${message} `;
 });
 
@@ -59,5 +59,5 @@ export const redisLogger = loggerInstance.child({
   server_name: "Redis Server",
 });
 
-const logger = loggerInstance.child({ server_name: "Mail Worker" });
+const logger = loggerInstance.child({ server_name: "Notification Worker" });
 export default logger;

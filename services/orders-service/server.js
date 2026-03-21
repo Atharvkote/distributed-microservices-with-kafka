@@ -29,6 +29,7 @@ import cookieParser from "cookie-parser";
 import bodyParser from "body-parser";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
+import { RateLimiterRedis } from "rate-limiter-flexible";
 import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-streams-adapter";
 
@@ -38,9 +39,20 @@ import { socketioLogger, redisLogger } from "./utils/logger.js";
 
 // Database configs
 import { connectDB, disconnectDB } from "./configs/mongodb.config.js";
-import orderRouter from "./routes/order.routes.js";
 
-// Connect MongoDB
+// Kafka configs
+import {
+  initKafkaConsumer,
+  initKafkaProducer,
+} from "./configs/kafka.config.js";
+
+// Kafka event consumers
+import { startConsumption } from "./kafka/kafka.consumer.js";
+
+// Routes
+import orderRoutes from "./routes/order.routes.js";
+
+// Connecting to MongoDB
 await connectDB();
 
 const app = express();
@@ -90,7 +102,7 @@ if (!redisClient) {
       redisLogger.info(
         `Redis connected successfully at ${
           process.env.REDIS_URL || "redis://localhost:6379"
-        }`
+        }`,
       );
     })
     .catch((err) => {
@@ -106,17 +118,17 @@ app.use(cookieParser());
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
-  })
+  }),
 );
 
-// CORS
-// Only allow specific origins when credentials are required. Do NOT use "*" when
-// `credentials: true` because browsers will reject responses that set
-// Access-Control-Allow-Origin: * together with Access-Control-Allow-Credentials: true.
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:9090",
-];
+/**
+ * @cors Configuration
+ * - Credentials need specific origins → Use exact origin, not "*"
+ * - "*" cannot be used with credentials → Browser blocks it
+ * - Enforced by browser → Invalid CORS config = request failure
+ */
+
+const allowedOrigins = ["http://localhost:5173", "http://localhost:9090"];
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -130,7 +142,7 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  })
+  }),
 );
 
 // Rate limiters (only if Redis is available)
@@ -223,7 +235,7 @@ if (redisClient) {
 app.use((req, res, next) => {
   logger.info(`Received ${req.method} request to ${req.url}`);
   logger.info(
-    `Request body: ${req.body ? JSON.stringify(req.body, null, 2) : "N/A"}`
+    `Request body: ${req.body ? JSON.stringify(req.body, null, 2) : "N/A"}`,
   );
   logger.info(`Request IP: ${req.ip}`);
   next();
@@ -243,9 +255,8 @@ app.get("/health", (req, res) => {
   });
 });
 
-app.use("/orders", orderRouter);
-
-
+// API Routes
+app.use("/api/orders", orderRoutes);
 
 // Global error handler middleware (must be after all routes)
 app.use((err, req, res, next) => {
@@ -268,7 +279,6 @@ app.use((req, res) => {
   });
 });
 
-// --------------------- SOCKET.IO ---------------------
 /**
  * @socketio Initialization
  * - Creates Socket.IO server attached to HTTP server
@@ -283,7 +293,7 @@ if (redisClient) {
   } catch (error) {
     logger.warn(
       "Failed to create Socket.IO Redis adapter, using default:",
-      error.message
+      error.message,
     );
   }
 }
@@ -314,16 +324,13 @@ export const io = new Server(server, {
   allowUpgrades: true,
 });
 
-// Initialize your socket event handlers here (placeholder)
-// import { initializeMyHandlers } from "./socket-handlers/my-handler.js";
-// initializeMyHandlers(io);
-
-// --------------------- SERVER ---------------------
-server.listen(SERVER_PORT, () => {
+server.listen(SERVER_PORT, async () => {
   logger.info(
-    `Server is running on http://localhost:${SERVER_PORT} [Env: ${process.env.NODE_ENV}]`
+    `Server is running on http://localhost:${SERVER_PORT} [Env: ${process.env.NODE_ENV}]`,
   );
-  logger.info(`Server accessible at http://localhost:${SERVER_PORT}`);
+  await initKafkaProducer();
+  await initKafkaConsumer();
+  await startConsumption();
 });
 
 // Handle server errors

@@ -40,6 +40,16 @@ import { socketioLogger, redisLogger } from "./utils/logger.js";
 // Database configs
 import { connectDB, disconnectDB } from "./configs/mongodb.config.js";
 
+import {
+  disconnectKafka,
+  initKafkaConsumer,
+  initKafkaProducer,
+} from "./configs/kafka.config.js";
+import { startOrderConsumer} from "./kafka/order.consumer.js"
+import paymentRoutes from "./routes/payment.routes.js";
+import webhookRoutes from "./webhooks/razorpay.webhook.js";
+import { errorHandler, notFound } from "./controllers/payment.controller.js";
+
 // Connect MongoDB
 await connectDB();
 
@@ -90,7 +100,7 @@ if (!redisClient) {
       redisLogger.info(
         `Redis connected successfully at ${
           process.env.REDIS_URL || "redis://localhost:6379"
-        }`
+        }`,
       );
     })
     .catch((err) => {
@@ -99,24 +109,9 @@ if (!redisClient) {
 }
 
 // Middleware
-app.use(express.json());
-app.use(bodyParser.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-app.use(
-  helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-  })
-);
 
-// CORS
-// Only allow specific origins when credentials are required. Do NOT use "*" when
-// `credentials: true` because browsers will reject responses that set
-// Access-Control-Allow-Origin: * together with Access-Control-Allow-Credentials: true.
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:9090",
-];
+app.disable("x-powered-by");
+const allowedOrigins = ["http://localhost:5173", "http://localhost:9090"];
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -130,8 +125,31 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  })
+  }),
 );
+
+app.use(express.json());
+app.use(bodyParser.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
+app.use("/webhook/razorpay", express.raw({ type: "application/json" }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true }));
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", service: "payment-service" });
+});
+
+app.use("/api/payment", paymentRoutes);
+app.use("/webhook", webhookRoutes);
+
+app.use(notFound);
+app.use(errorHandler);
 
 // Rate limiters (only if Redis is available)
 let rateLimiter = null;
@@ -223,7 +241,7 @@ if (redisClient) {
 app.use((req, res, next) => {
   logger.info(`Received ${req.method} request to ${req.url}`);
   logger.info(
-    `Request body: ${req.body ? JSON.stringify(req.body, null, 2) : "N/A"}`
+    `Request body: ${req.body ? JSON.stringify(req.body, null, 2) : "N/A"}`,
   );
   logger.info(`Request IP: ${req.ip}`);
   next();
@@ -242,8 +260,6 @@ app.get("/health", (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
-
-
 
 // Global error handler middleware (must be after all routes)
 app.use((err, req, res, next) => {
@@ -281,7 +297,7 @@ if (redisClient) {
   } catch (error) {
     logger.warn(
       "Failed to create Socket.IO Redis adapter, using default:",
-      error.message
+      error.message,
     );
   }
 }
@@ -312,16 +328,16 @@ export const io = new Server(server, {
   allowUpgrades: true,
 });
 
-// Initialize your socket event handlers here (placeholder)
-// import { initializeMyHandlers } from "./socket-handlers/my-handler.js";
-// initializeMyHandlers(io);
-
-// --------------------- SERVER ---------------------
-server.listen(SERVER_PORT, () => {
+server.listen(SERVER_PORT, async () => {
   logger.info(
-    `Server is running on http://localhost:${SERVER_PORT} [Env: ${process.env.NODE_ENV}]`
+    `Server is running on http://localhost:${SERVER_PORT} [Env: ${process.env.NODE_ENV}]`,
   );
-  logger.info(`Server accessible at http://localhost:${SERVER_PORT}`);
+  await initKafkaProducer();
+  await initKafkaConsumer();
+  await startOrderConsumer();
+  logger.info(
+    `Kafka producer and consumer initialized successfully [Env: ${process.env.NODE_ENV}]`,
+  );
 });
 
 // Handle server errors

@@ -1,5 +1,5 @@
 import { userNotification } from "../../controllers/notifications.controller.js";
-import { emailQueue } from "../../server.js";
+import { emailQueue, notificationQueue } from "../../server.js";
 import { queueLogger } from "../../utils/logger.js";
 
 // User
@@ -19,14 +19,22 @@ export const handleUserCreation = async (payload, event, prefix) => {
     }
   );
 
-  userNotification(payload.userId, {
+  await userNotification(payload.userId, {
     title: "Hey There Mate !!! Welcome To Vendex !!",
     message: "Check Your latest profile , Tweak More if Your want !",
     type: "INFO",
-    userId: payload.userId,
   });
 
   queueLogger.info(`${prefix} USER_CREATED email job queued`);
+
+  if (notificationQueue) {
+    await notificationQueue.add("send-notification", {
+      type: "INFO",
+      title: "Hey There Mate !!! Welcome To Vendex !!",
+      message: "Check Your latest profile , Tweak More if Your want !",
+      userId: payload.userId,
+    });
+  }
 };
 
 export const handleUserUpdation = async (payload, event, prefix) => {
@@ -42,14 +50,22 @@ export const handleUserUpdation = async (payload, event, prefix) => {
     }
   );
 
-  userNotification(payload.userId, {
+  await userNotification(payload.userId, {
     title: "Your User Proifle Been Updated",
     message: "Check Your Lastest Profile , Tweak More if Your want !",
     type: "INFO",
-    userId: payload.userId,
   });
 
   queueLogger.info(`${prefix} USER_UPDATED email job queued`);
+
+  if (notificationQueue) {
+    await notificationQueue.add("send-notification", {
+      type: "INFO",
+      title: "Your User Proifle Been Updated",
+      message: "Check Your Lastest Profile , Tweak More if Your want !",
+      userId: payload.userId,
+    });
+  }
 };
 
 export const handleUserDeletion = async (payload, event, prefix) => {
@@ -84,14 +100,22 @@ export const handleVendorCreation = async (payload, event, prefix) => {
     }
   );
 
-  userNotification(payload.userId, {
+  await userNotification(payload.userId, {
     title: "Hurraay!!!! You are a Vendor at Vendex Now!",
     message: "Check Your Vendor Profile , Deploy you shop product now!!!!",
     type: "INFO",
-    userId: payload.userId,
   });
 
   queueLogger.info(`${prefix} VENDOR_CREATED email job queued`);
+
+  if (notificationQueue) {
+    await notificationQueue.add("send-notification", {
+      type: "INFO",
+      title: "Hurraay!!!! You are a Vendor at Vendex Now!",
+      message: "Check Your Vendor Profile , Deploy you shop product now!!!!",
+      userId: payload.userId,
+    });
+  }
 };
 
 export const handleVendorUpdation = async (payload, event, prefix) => {
@@ -107,14 +131,22 @@ export const handleVendorUpdation = async (payload, event, prefix) => {
     }
   );
 
-   userNotification(payload.userId, {
+  await userNotification(payload.userId, {
     title: "Your Vendor Proifle Been Updated",
     message: "Check Your Lastest Profile , Tweak More if Your want !",
     type: "INFO",
-    userId: payload.userId,
   });
 
   // queueLogger.info(`${prefix} VENDOR_UPDATED email job queued`);
+
+  if (notificationQueue) {
+    await notificationQueue.add("send-notification", {
+      type: "INFO",
+      title: "Your Vendor Proifle Been Updated",
+      message: "Check Your Lastest Profile , Tweak More if Your want !",
+      userId: payload.userId,
+    });
+  }
 };
 
 export const handleVendorDeletion = async (payload, event, prefix) => {
