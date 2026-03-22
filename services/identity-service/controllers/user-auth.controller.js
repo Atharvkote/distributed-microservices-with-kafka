@@ -38,7 +38,8 @@ export const SignUpController = async (req, res) => {
 
     const existingUser = await UserModel.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({
+      return res.status(409).json({
+        success: false,
         message: "User account already exists with this email",
       });
     }
@@ -69,6 +70,7 @@ export const SignUpController = async (req, res) => {
     publishUserCreated(payload);
 
     return res.status(201).json({
+      success: true,
       message: "User account created successfully",
       user: {
         _id: savedUser._id,
@@ -77,6 +79,7 @@ export const SignUpController = async (req, res) => {
         phone: savedUser.phone,
       },
       token,
+      accessToken: token,
     });
   } catch (error) {
     logger.error(`Error in SignUpController`, error);
@@ -172,7 +175,7 @@ export const LogOutController = async (req, res) => {
 
     // Kafka Event Streaming
     const payload = {
-      userId: req.user._id,
+      userId: req.user.id,
     };
     publishUserLogout(payload);
 

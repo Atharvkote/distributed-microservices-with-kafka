@@ -7,10 +7,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import type { Product } from '@/services/api';
+import type { UiProduct } from '@/types/commerce';
+import { formatMoney } from '@/lib/money';
 
 interface ProductTableProps {
-  products: Product[];
+  products: UiProduct[];
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   showVendor?: boolean;
@@ -60,7 +61,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">{product.category}</TableCell>
               {showVendor && <TableCell className="text-sm">{product.vendorName}</TableCell>}
-              <TableCell className="font-semibold text-sm">${product.price.toFixed(2)}</TableCell>
+              <TableCell className="font-semibold text-sm">{formatMoney(product.price)}</TableCell>
               <TableCell>
                 <span className={cn(
                   'text-sm font-medium',

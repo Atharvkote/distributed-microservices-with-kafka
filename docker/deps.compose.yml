@@ -32,6 +32,9 @@ services:
   # networks: [vendex-infra]
 
 
+networks:
+  vendex-infra:
+    external: true
 
 volumes:
   redis_data:

@@ -5,6 +5,7 @@ import { Separator } from '@/components/ui/separator';
 import { ShieldCheck, Truck, ArrowRight } from 'lucide-react';
 import { useCartStore } from '@/store/cartStore';
 import { Link } from 'react-router-dom';
+import { formatMoney } from '@/lib/money';
 
 interface CheckoutSummaryProps {
   showCheckoutButton?: boolean;
@@ -26,17 +27,17 @@ const CheckoutSummary: React.FC<CheckoutSummaryProps> = ({ showCheckoutButton = 
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal ({items.length} items)</span>
-            <span className="font-medium">${subtotal.toFixed(2)}</span>
+            <span className="font-medium">{formatMoney(subtotal)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Shipping</span>
             <span className={shipping === 0 ? 'text-emerald-400 font-medium' : 'font-medium'}>
-              {shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`}
+              {shipping === 0 ? 'FREE' : formatMoney(shipping)}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Tax</span>
-            <span className="font-medium">${tax.toFixed(2)}</span>
+            <span className="text-muted-foreground">Tax (est.)</span>
+            <span className="font-medium">{formatMoney(tax)}</span>
           </div>
         </div>
 
@@ -44,7 +45,7 @@ const CheckoutSummary: React.FC<CheckoutSummaryProps> = ({ showCheckoutButton = 
 
         <div className="flex justify-between text-base font-bold">
           <span>Total</span>
-          <span className="neon-text">${total.toFixed(2)}</span>
+          <span className="neon-text">{formatMoney(total)}</span>
         </div>
 
         {showCheckoutButton && (
@@ -62,7 +63,7 @@ const CheckoutSummary: React.FC<CheckoutSummaryProps> = ({ showCheckoutButton = 
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Truck className="h-3.5 w-3.5 text-primary" />
-            <span>Free shipping on orders over $100</span>
+            <span>Free shipping on orders over {formatMoney(100)}</span>
           </div>
         </div>
       </CardContent>

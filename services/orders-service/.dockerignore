@@ -6,14 +6,19 @@ pnpm-debug.log
 .git
 .gitignore
 
-.env
-.env.*
-.env.local
-
 dist
 build
 out
 coverage
+
+.env
+.env.*
+.env.local
+.env.local.*
+.env.development.*
+.env.development
+.env.production.*
+.env.production
 
 logs
 *.log

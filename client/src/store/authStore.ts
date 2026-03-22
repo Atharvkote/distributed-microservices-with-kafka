@@ -1,4 +1,9 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { toast } from 'sonner';
+import { authApi } from '@/api/auth.api';
+import { setAccessToken } from '@/lib/access-token';
+import { parseJwtPayload } from '@/lib/jwt';
 
 export type UserRole = 'customer' | 'vendor' | 'admin';
 
@@ -10,56 +15,159 @@ export interface User {
   role: UserRole;
 }
 
+function resolveRole(email: string, isVendor: boolean): UserRole {
+  const raw = import.meta.env.VITE_ADMIN_EMAILS;
+  const admins = raw
+    ? raw.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
+    : [];
+  if (admins.includes(email.toLowerCase())) return 'admin';
+  if (isVendor) return 'vendor';
+  return 'customer';
+}
+
+function axiosMessage(e: unknown): string {
+  if (e && typeof e === 'object' && 'response' in e) {
+    const r = (e as {
+      response?: {
+        data?: { message?: string; errors?: Record<string, string[] | undefined> };
+      };
+    }).response;
+    if (r?.data?.message) return String(r.data.message);
+    const fieldErrors = r?.data?.errors;
+    if (fieldErrors && typeof fieldErrors === 'object') {
+      const first = Object.values(fieldErrors).flat().find(Boolean);
+      if (first) return String(first);
+    }
+  }
+  return 'Something went wrong';
+}
+
 interface AuthState {
+  token: string | null;
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  authReady: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  register: (payload: { full_name: string; email: string; password: string }) => Promise<void>;
+  logout: () => Promise<void>;
   setUser: (user: User) => void;
+  bootstrap: () => Promise<void>;
 }
 
-const mockUsers: Record<string, User> = {
-  'customer@demo.com': {
-    id: 'u1',
-    name: 'Alex Rivera',
-    email: 'customer@demo.com',
-    avatar: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Alex',
-    role: 'customer',
-  },
-  'vendor@demo.com': {
-    id: 'u2',
-    name: 'Sarah Chen',
-    email: 'vendor@demo.com',
-    avatar: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Sarah',
-    role: 'vendor',
-  },
-  'admin@demo.com': {
-    id: 'u3',
-    name: 'Jordan Park',
-    email: 'admin@demo.com',
-    avatar: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Jordan',
-    role: 'admin',
-  },
-};
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      token: null,
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      authReady: false,
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: mockUsers['customer@demo.com'],
-  isAuthenticated: true,
-  isLoading: false,
+      setUser: (user) => set({ user, isAuthenticated: true }),
 
-  login: async (email: string, _password: string) => {
-    set({ isLoading: true });
-    await new Promise((r) => setTimeout(r, 800));
-    const user = mockUsers[email] || mockUsers['customer@demo.com'];
-    set({ user, isAuthenticated: true, isLoading: false });
-  },
+      login: async (email, password) => {
+        set({ isLoading: true });
+        try {
+          const { data } = await authApi.login({ email, password });
+          const claims = parseJwtPayload(data.token);
+          const isVendor = Boolean(claims?.isVendor);
+          const user: User = {
+            id: data.user._id,
+            name: data.user.full_name,
+            email: data.user.email,
+            avatar: data.user.profile_picture || '',
+            role: resolveRole(data.user.email, isVendor),
+          };
+          setAccessToken(data.token);
+          set({
+            token: data.token,
+            user,
+            isAuthenticated: true,
+            isLoading: false,
+            authReady: true,
+          });
+          toast.success(data.message || 'Signed in');
+        } catch (e) {
+          set({ isLoading: false });
+          toast.error(axiosMessage(e));
+          throw e;
+        }
+      },
 
-  logout: () => {
-    set({ user: null, isAuthenticated: false });
-  },
+      register: async ({ full_name, email, password }) => {
+        set({ isLoading: true });
+        try {
+          const { data } = await authApi.signup({ full_name, email, password });
+          const token = data.accessToken ?? data.token;
+          if (!token) {
+            set({ isLoading: false });
+            toast.error('Registration succeeded but no token was returned');
+            throw new Error('Missing token');
+          }
+          const claims = parseJwtPayload(token);
+          const isVendor = Boolean(claims?.isVendor);
+          const user: User = {
+            id: data.user._id,
+            name: data.user.full_name,
+            email: data.user.email,
+            avatar: data.user.profile_picture || '',
+            role: resolveRole(data.user.email, isVendor),
+          };
+          setAccessToken(token);
+          set({
+            token,
+            user,
+            isAuthenticated: true,
+            isLoading: false,
+            authReady: true,
+          });
+          toast.success(data.message || 'Account created');
+        } catch (e) {
+          set({ isLoading: false });
+          toast.error(axiosMessage(e));
+          throw e;
+        }
+      },
 
-  setUser: (user: User) => {
-    set({ user, isAuthenticated: true });
-  },
-}));
+      logout: async () => {
+        try {
+          if (get().token) await authApi.logout();
+        } catch {
+          /* ignore network errors on logout */
+        }
+        setAccessToken(null);
+        set({ token: null, user: null, isAuthenticated: false });
+      },
+
+      bootstrap: async () => {
+        const token = get().token;
+        setAccessToken(token);
+        if (!token) {
+          set({ authReady: true, isAuthenticated: false, user: null });
+          return;
+        }
+        try {
+          const { data } = await authApi.checkAuth();
+          const claims = parseJwtPayload(token);
+          const isVendor = Boolean(claims?.isVendor);
+          const user: User = {
+            id: data.user.id,
+            name: (claims?.full_name as string) || data.user.email.split('@')[0],
+            email: data.user.email,
+            avatar: '',
+            role: resolveRole(data.user.email, isVendor),
+          };
+          set({ user, isAuthenticated: true, authReady: true });
+        } catch {
+          setAccessToken(null);
+          set({ token: null, user: null, isAuthenticated: false, authReady: true });
+        }
+      },
+    }),
+    {
+      name: 'vendex-auth',
+      partialize: (s) => ({ token: s.token }),
+    }
+  )
+);

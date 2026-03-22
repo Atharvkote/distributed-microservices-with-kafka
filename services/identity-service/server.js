@@ -46,6 +46,7 @@ import logger, { kafkaLogger, redisLogger } from "./utils/logger.js";
 
 // Routers
 import userAuthRouter from "./routes/user-auth.routes.js";
+import { SignUpController } from "./controllers/user-auth.controller.js";
 import vendorProfileRouter from "./routes/vendor-profile.routes.js";
 import userProfileRouter from "./routes/user-profile.routes.js";
 
@@ -289,6 +290,7 @@ app.get("/", (req, res) => {
 });
 
 app.use("/user", userAuthRouter);
+app.use("/api/auth", userAuthRouter);
 app.use("/vendor-profile", vendorProfileRouter);
 // app.use("/user-profile", userProfileRouter);
 

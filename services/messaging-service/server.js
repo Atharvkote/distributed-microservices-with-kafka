@@ -279,8 +279,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(authMiddleware);
-
 /**
  * @socketio Initialization & Broadcasting
  *
@@ -340,6 +338,7 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/notification", notificationRouter);
+app.use("/api/notifications", notificationRouter);
 
 // 404 handler
 app.use((req, res) => {

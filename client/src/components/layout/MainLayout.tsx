@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, Link } from 'react-router-dom';
-import { Package, ShoppingCart, Search, Menu, Heart } from 'lucide-react';
+import { Package, ShoppingCart, Search, Menu, Heart, HeartPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCartStore } from '@/store/cartStore';
@@ -14,46 +14,58 @@ import {
 import { User, Settings, LogOut, LayoutDashboard } from 'lucide-react';
 import Footer from './Footer';
 import MobileMenu from './MobileMenu';
-
+import { FiPackage } from "react-icons/fi";
+import { IoIosCart, IoIosHome, IoMdSearch } from "react-icons/io";
+import { MdHome } from "react-icons/md";
+import { AiFillProduct } from "react-icons/ai";
+import {useLocation} from "react-router-dom"
 
 const MainLayout: React.FC = () => {
   const cartCount = useCartStore((s) => s.totalItems());
   const { user, isAuthenticated, logout } = useAuthStore();
   const { toggleMobileMenu } = useUIStore();
-
+  const location = useLocation();
+  const isHome = location.pathname === "/";
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="relative min-h-screen flex flex-col ">
       {/* Navbar */}
-      <header className="sticky top-0 z-50 h-16 border-b border-border/50 glass">
+      <header className={` ${!isHome ? "" : "fixed inset-0 z-50 top-0" } w-full h-16 bg-transparent backdrop:backdrop-blur-2xl`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between h-full px-4 md:px-6">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 group">
-            <div className="h-9 w-9 rounded-lg gradient-primary flex items-center justify-center group-hover:brand-glow transition-all duration-300">
-              <Package className="h-5 w-5 text-white" />
-            </div>
-            <span className="font-bold text-lg  hidden sm:block tracking-widest">VenDeX</span>
+          <Link to="/" className="flex items-center gap-1 group">
+            <img src="/Logo.png" alt="NexaMarket" height={45} width={45} className=" rounded-lg" />
+            <span className="font-bold text-2xl tracking-wider neon-text">VenDe<span className="text-3xl">X </span></span>
           </Link>
 
           {/* Navigation */}
           <nav className="hidden md:flex items-center gap-6">
-            <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Home</Link>
-            <Link to="/products" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Products</Link>
-            <Link to="/orders" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">My Orders</Link>
+            <Link to="/" className="text-sm font-medium text-white cursor-pointer hover:text-primary transition-colors flex items-center gap-2">
+              <MdHome className="h-5 w-5" />
+              Home
+            </Link>
+            <Link to="/products" className="text-sm font-medium text-white cursor-pointer hover:text-primary transition-colors flex items-center gap-2">
+              <AiFillProduct className="h-5 w-5" />
+              Products
+            </Link>
+            <Link to="/orders" className="text-sm font-medium text-white cursor-pointer hover:text-primary transition-colors flex items-center gap-2">
+              <IoIosCart className="h-5 w-5" />
+              My Orders
+            </Link>
           </nav>
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-              <Search className="h-5 w-5" />
+            <Button variant="ghost" size="icon" className="text-white cursor-pointer hover:text-foreground">
+              <IoMdSearch className="h-7 w-7" />
             </Button>
 
-            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground hidden sm:flex">
-              <Heart className="h-5 w-5" />
+            <Button variant="ghost" size="icon" className="ttext-white cursor-pointer hover:text-foreground hidden sm:flex">
+              <HeartPlus className="h-5 w-5" />
             </Button>
 
             <Link to="/cart">
-              <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
-                <ShoppingCart className="h-5 w-5" />
+              <Button variant="ghost" size="icon" className="text-white cursor-pointer hover:text-foreground">
+                <IoIosCart  className="h-7 w-7" />
                 {cartCount > 0 && (
                   <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-[10px] gradient-primary border-0">
                     {cartCount}

@@ -12,6 +12,7 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { useCartStore } from '@/store/cartStore';
 import { useUIStore } from '@/store/uiStore';
+import { useNotificationsQuery } from '@/hooks/useNotifications';
 
 interface TopBarProps {
   showSearch?: boolean;
@@ -22,6 +23,9 @@ const TopBar: React.FC<TopBarProps> = ({ showSearch = true, showCart = false }) 
   const { user, logout } = useAuthStore();
   const cartCount = useCartStore((s) => s.totalItems());
   const { toggleMobileMenu } = useUIStore();
+  const { data: notifData } = useNotificationsQuery(user?.id);
+  const unread =
+    notifData?.data?.filter((n) => n.isRead === false).length ?? 0;
 
   return (
     <header className="sticky top-0 z-40 h-16 border-b border-border/50 glass">
@@ -66,7 +70,11 @@ const TopBar: React.FC<TopBarProps> = ({ showSearch = true, showCart = false }) 
           {/* Notifications */}
           <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
             <Bell className="h-5 w-5" />
-            <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary animate-pulse-neon" />
+            {unread > 0 && (
+              <Badge className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 flex items-center justify-center text-[9px] gradient-primary border-0">
+                {unread > 9 ? '9+' : unread}
+              </Badge>
+            )}
           </Button>
 
           {/* User menu */}
@@ -99,7 +107,7 @@ const TopBar: React.FC<TopBarProps> = ({ showSearch = true, showCart = false }) 
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout} className="text-destructive cursor-pointer">
+              <DropdownMenuItem onClick={() => void logout()} className="text-destructive cursor-pointer">
                 <LogOut className="h-4 w-4 mr-2" /> Log out
               </DropdownMenuItem>
             </DropdownMenuContent>

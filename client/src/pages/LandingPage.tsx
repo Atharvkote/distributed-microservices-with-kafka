@@ -1,34 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Sparkles, Zap, Shield, Truck, Star, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import ProductCard from '@/components/product/ProductCard';
-import { api, type Product } from '@/services/api';
 import LightRays from '@/components/shared/LightRays';
+import { useProductsQuery, useCategoriesQuery } from '@/hooks/useCatalog';
+import { mapCatalogListItem } from '@/lib/catalog-mappers';
+import { Skeleton } from '@/components/ui/skeleton';
+import { HiShoppingCart } from "react-icons/hi2";
+import CategoryGrid from '@/components/common/CategoryCards';
+import { IoIosCart, IoIosHome } from "react-icons/io";
 
-const categories = [
-  { name: 'Electronics', icon: Zap, count: 248 },
-  { name: 'Fashion', icon: Sparkles, count: 186 },
-  { name: 'Home & Decor', icon: Package, count: 124 },
-  { name: 'Sports', icon: Shield, count: 92 },
-];
+const iconFor = (name: string) => {
+  const n = name.toLowerCase();
+  if (n.includes('sport')) return Shield;
+  if (n.includes('home') || n.includes('decor')) return Package;
+  if (n.includes('fashion')) return Sparkles;
+  return Zap;
+};
 
 const LandingPage: React.FC = () => {
-  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const { data: productsData, isLoading: productsLoading } = useProductsQuery({ page: 1, limit: 4 });
+  const { data: categories = [], isLoading: catLoading } = useCategoriesQuery();
 
-  useEffect(() => {
-    api.products.getAll().then((p) => setFeaturedProducts(p.slice(0, 4)));
-  }, []);
+  const featured = (productsData?.data ?? []).slice(0, 4).map(mapCatalogListItem);
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-
-      {/* Light Rays Background */}
+    <div className="relative top-0 min-h-screen overflow-hidden">
       <div className="absolute inset-0 z-0 pointer-events-none">
         <LightRays
           raysOrigin="top-center"
-          raysColor="#bd71ff"
+          raysColor="#f9a300"
           raysSpeed={2}
           lightSpread={1}
           rayLength={3}
@@ -43,96 +45,53 @@ const LandingPage: React.FC = () => {
         />
       </div>
 
-      {/* Hero Section */}
-      <section className="relative z-20 flex items-center justify-center min-h-screen py-20">
-
-        {/* Background glow */}
+      <section className="relative  z-20 flex items-center justify-center min-h-screen ">
         <div className="absolute inset-0 -z-10">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl animate-float"></div>
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl animate-float" />
           <div
             className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-primary/10 rounded-full blur-3xl animate-float"
-            style={{ animationDelay: "2s" }}
-          ></div>
+            style={{ animationDelay: '2s' }}
+          />
         </div>
 
         <div className="max-w-7xl mx-auto px-4 md:px-6 text-center">
-
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight mb-6">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-wide leading-none mb-1">
             Discover Premium
-            <span className="neon-text font-cursive font-extrabold text-primary">
-              {" "}Products
-            </span>{" "}
-            from
+            <span className="neon-text font-cursive font-extrabold text-primary carattere-regular"> Products</span> from
             <br />
-            Trusted{" "}
-            <span className="neon-text font-cursive font-extrabold text-primary">
-              Vendors
-            </span>
+            Trusted <span className="neon-text font-cursive font-extrabold text-primary carattere-regular">Vendors</span>
           </h1>
 
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
-            VenDeX brings you a curated marketplace of top-quality products from
-            verified vendors worldwide. Shop with confidence.
+          <p className="text-lg md:text-xl text-white max-w-2xl mx-auto mb-10 leading-relaxed">
+            <span className="neon-text font-cursive font-extrabold text-primary "> VenDeX</span> brings you a curated marketplace of top-quality products from verified vendors worldwide.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link to="/products">
               <Button
                 size="lg"
-                className="gradient-primary rounded-md hover:neon-glow transition-all h-12 px-8 text-base font-semibold"
+                className="gradient-primary cursor-pointer rounded-md hover:neon-glow transition-all h-12 px-8 text-base font-semibold"
               >
                 Browse Products
               </Button>
             </Link>
-
             <Link to="/vendor/dashboard">
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-2 border-primary hover:bg-primary text-primary h-12 px-8 text-base"
-              >
+              <Button size="lg" className="border-2 cursor-pointer bg-transparent text-amber-200 border-amber-400 hover:bg-amber-300 hover:text-black h-12 px-8 text-base">
                 Become a Vendor
               </Button>
             </Link>
           </div>
-
         </div>
       </section>
 
-      {/* Categories */}
-      <section className="py-16 md:py-20">
-        <div className="max-w-7xl mx-auto px-4 md:px-6">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl md:text-3xl font-bold mb-3">Shop by Category</h2>
-            <p className="text-muted-foreground">Find exactly what you're looking for</p>
-          </div>
+      <CategoryGrid categories={categories} catLoading={catLoading} iconFor={iconFor} />
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {categories.map((cat) => {
-              const Icon = cat.icon;
-              return (
-                <Link key={cat.name} to={`/products?category=${cat.name}`}>
-                  <div className="glass border border-border/50 rounded-xl p-6 text-center group hover:neon-glow transition-all duration-300 cursor-pointer">
-                    <div className="h-14 w-14 rounded-xl gradient-primary mx-auto flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                      <Icon className="h-7 w-7 text-white" />
-                    </div>
-                    <h3 className="font-semibold text-sm mb-1">{cat.name}</h3>
-                    <p className="text-xs text-muted-foreground">{cat.count} products</p>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Products */}
       <section className="py-16 md:py-20">
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-2xl md:text-3xl font-bold mb-2">Featured Products</h2>
-              <p className="text-muted-foreground text-sm">Hand-picked by our editors</p>
+              <p className="text-muted-foreground text-sm">Latest from the catalog</p>
             </div>
             <Link to="/products">
               <Button variant="outline" className="border-primary/30 text-primary hover:bg-primary/10">
@@ -142,36 +101,40 @@ const LandingPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                id={product.id}
-                name={product.name}
-                price={product.price}
-                originalPrice={product.originalPrice}
-                image={product.image}
-                rating={product.rating}
-                reviewCount={product.reviewCount}
-                category={product.category}
-                vendorName={product.vendorName}
-              />
-            ))}
+            {productsLoading
+              ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="aspect-[3/4] rounded-xl" />)
+              : featured.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  id={product.id}
+                  name={product.name}
+                  price={product.price}
+                  originalPrice={product.originalPrice}
+                  image={product.image}
+                  rating={product.rating}
+                  reviewCount={product.reviewCount}
+                  category={product.category}
+                  vendorName={product.vendorName}
+                />
+              ))}
           </div>
         </div>
       </section>
 
-      {/* Trust Badges */}
       <section className="py-16 border-t border-border/30">
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
-              { icon: Shield, title: 'Buyer Protection', desc: 'Full refund if item is not as described or not delivered.' },
-              { icon: Truck, title: 'Free Shipping', desc: 'Free delivery on orders over $100. Fast & reliable.' },
-              { icon: Star, title: 'Verified Vendors', desc: 'All vendors are verified and rated by real customers.' },
+              { icon: Shield, title: 'Buyer Protection', desc: 'Secure checkout with verified payment flows.' },
+              { icon: Truck, title: 'Fast Shipping', desc: 'Reliable delivery partners across regions.' },
+              { icon: Star, title: 'Verified Vendors', desc: 'Shop from trusted sellers on the platform.' },
             ].map((badge) => {
               const Icon = badge.icon;
               return (
-                <div key={badge.title} className="flex items-start gap-4 glass rounded-xl p-6 border border-border/50 hover:neon-glow transition-all duration-300">
+                <div
+                  key={badge.title}
+                  className="flex items-start gap-4 glass rounded-xl p-6 border border-border/50 hover:neon-glow transition-all duration-300"
+                >
                   <div className="h-12 w-12 rounded-xl gradient-primary flex items-center justify-center shrink-0">
                     <Icon className="h-6 w-6 text-white" />
                   </div>

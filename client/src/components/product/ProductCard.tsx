@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 import { useCartStore } from '@/store/cartStore';
 import { toast } from 'sonner';
+import { formatMoney } from '@/lib/money';
 
 interface ProductCardProps {
   id: string;
@@ -136,10 +137,10 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
         {/* Price */}
         <div className="flex items-center gap-2 pt-1">
-          <span className="text-lg font-bold">${price.toFixed(2)}</span>
+          <span className="text-lg font-bold">{formatMoney(price)}</span>
           {originalPrice && (
             <span className="text-sm text-muted-foreground line-through">
-              ${originalPrice.toFixed(2)}
+              {formatMoney(originalPrice)}
             </span>
           )}
         </div>

@@ -3,6 +3,7 @@ import { create } from 'zustand';
 export interface CartItem {
   id: string;
   productId: string;
+  variantId?: string;
   name: string;
   price: number;
   image: string;
@@ -12,7 +13,7 @@ export interface CartItem {
 
 interface CartState {
   items: CartItem[];
-  addItem: (item: Omit<CartItem, 'quantity'>) => void;
+  addItem: (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
@@ -21,39 +22,24 @@ interface CartState {
 }
 
 export const useCartStore = create<CartState>((set, get) => ({
-  items: [
-    {
-      id: 'ci1',
-      productId: 'p1',
-      name: 'Wireless Pro Headphones',
-      price: 299.99,
-      image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200',
-      quantity: 1,
-      vendorName: 'AudioTech Pro',
-    },
-    {
-      id: 'ci2',
-      productId: 'p3',
-      name: 'Smart Fitness Watch',
-      price: 199.99,
-      image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200',
-      quantity: 2,
-      vendorName: 'WearTech',
-    },
-  ],
+  items: [],
 
   addItem: (item) => {
-    const existing = get().items.find((i) => i.productId === item.productId);
+    const qty = item.quantity ?? 1;
+    const keyVariant = item.variantId ?? '';
+    const existing = get().items.find(
+      (i) => i.productId === item.productId && (i.variantId ?? '') === keyVariant
+    );
     if (existing) {
       set({
         items: get().items.map((i) =>
-          i.productId === item.productId
-            ? { ...i, quantity: i.quantity + 1 }
-            : i
+          i.id === existing.id ? { ...i, quantity: i.quantity + qty } : i
         ),
       });
     } else {
-      set({ items: [...get().items, { ...item, quantity: 1 }] });
+      set({
+        items: [...get().items, { ...item, quantity: qty }],
+      });
     }
   },
 
