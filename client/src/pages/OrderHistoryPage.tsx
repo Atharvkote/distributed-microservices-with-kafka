@@ -1,170 +1,113 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { api, type Order } from '@/services/api';
+import React, { useMemo, useState } from 'react';
 import OrderTable from '@/components/order/OrderTable';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ClipboardList, ShoppingBag } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Search } from 'lucide-react';
 import TableSkeleton from '@/components/ui/TableSkeleton';
 import ErrorState from '@/components/common/ErrorState';
 import EmptyState from '@/components/common/EmptyState';
-import { toast } from 'sonner';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useDebounce } from '@/hooks/useDebounce';
+import { useAuthStore } from '@/store/authStore';
+import { useOrdersQuery } from '@/hooks/useOrders';
+import { mapOrderRecord, type UiOrder } from '@/types/commerce';
 
-type LoadState = 'idle' | 'loading' | 'success' | 'error';
-
-const STATUS_OPTIONS = [
+const statusOptions = [
   { value: 'all', label: 'All Orders' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'processing', label: 'Processing' },
-  { value: 'shipped', label: 'Shipped' },
-  { value: 'delivered', label: 'Delivered' },
-  { value: 'cancelled', label: 'Cancelled' },
-] as const;
+  { value: 'PENDING', label: 'Pending' },
+  { value: 'CONFIRMED', label: 'Confirmed' },
+  { value: 'PROCESSING', label: 'Processing' },
+  { value: 'SHIPPED', label: 'Shipped' },
+  { value: 'DELIVERED', label: 'Delivered' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+];
 
 const OrderHistoryPage: React.FC = () => {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [loadState, setLoadState] = useState<LoadState>('loading');
+  const user = useAuthStore((s) => s.user);
+  const [status, setStatus] = useState('all');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const debounced = useDebounce(search, 300);
 
-  const fetchOrders = useCallback(async () => {
-    setLoadState('loading');
-    try {
-      const data = await api.orders.getAll();
-      setOrders(data);
-      setLoadState('success');
-    } catch {
-      setLoadState('error');
-      toast.error('Failed to load orders', {
-        description: 'Please check your connection and try again.',
-      });
-    }
-  }, []);
+  const { data, isLoading, isError, refetch } = useOrdersQuery({
+    page,
+    limit: 20,
+    customerId: user?.id,
+    status: status === 'all' ? undefined : status,
+  });
 
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
-
-  const filtered = useMemo(
-    () => (statusFilter === 'all' ? orders : orders.filter((o) => o.status === statusFilter)),
-    [orders, statusFilter]
+  const rows: UiOrder[] = useMemo(
+    () => (data?.orders ?? []).map(mapOrderRecord),
+    [data]
   );
 
-  const handleStatusChange = useCallback((val: string) => {
-    setStatusFilter(val);
-  }, []);
+  const filtered = useMemo(() => {
+    if (!debounced.trim()) return rows;
+    const q = debounced.toLowerCase();
+    return rows.filter((o) => o.id.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q));
+  }, [rows, debounced]);
 
-  // ─── Loading state ───────────────────────────────────────────────
-  if (loadState === 'loading') {
-    return (
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-6">
-        {/* Header skeleton */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-48 rounded-xl" />
-            <Skeleton className="h-4 w-24 rounded-lg" />
-          </div>
-          <Skeleton className="h-8 w-36 rounded-lg" />
-        </div>
-
-        {/* Stats bar skeleton */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 rounded-xl" />
-          ))}
-        </div>
-
-        {/* Table skeleton */}
-        <TableSkeleton rows={6} cols={6} />
-      </div>
-    );
-  }
-
-  // ─── Error state ─────────────────────────────────────────────────
-  if (loadState === 'error') {
-    return (
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
-        <ErrorState
-          variant="network"
-          onRetry={fetchOrders}
-          className="glass rounded-2xl border border-border/50"
-        />
-      </div>
-    );
-  }
-
-  // ─── Success state ────────────────────────────────────────────────
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 py-8 space-y-6">
-
-      {/* Page header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-              <ClipboardList className="h-5 w-5 text-primary" />
-            </div>
-            Order History
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            {filtered.length} order{filtered.length !== 1 ? 's' : ''}
-            {statusFilter !== 'all' ? ` · ${statusFilter}` : ''}
-          </p>
+          <h1 className="text-3xl font-bold">Order History</h1>
+          <p className="text-muted-foreground text-sm mt-1">Your orders from the orders service</p>
         </div>
-
-        <Select value={statusFilter} onValueChange={handleStatusChange}>
-          <SelectTrigger className="w-[160px] bg-accent/30 border-border/50 rounded-lg">
-            <SelectValue placeholder="Filter" />
+        <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
+          <SelectTrigger className="w-[180px] bg-accent/30 border-border/50">
+            <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
           <SelectContent className="glass-strong">
-            {STATUS_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+            {statusOptions.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      {/* Status summary pills */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {[
-          { label: 'Total', count: orders.length, color: 'bg-primary/10 border-primary/20 text-primary' },
-          { label: 'Pending', count: orders.filter(o => o.status === 'pending').length, color: 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400' },
-          { label: 'Processing', count: orders.filter(o => o.status === 'processing').length, color: 'bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400' },
-          { label: 'Shipped', count: orders.filter(o => o.status === 'shipped').length, color: 'bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400' },
-          { label: 'Delivered', count: orders.filter(o => o.status === 'delivered').length, color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' },
-        ].map(({ label, count, color }) => (
-          <button
-            key={label}
-            onClick={() => handleStatusChange(label === 'Total' ? 'all' : label.toLowerCase())}
-            className={`flex flex-col items-center justify-center gap-1 p-3 rounded-xl border transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${
-              (statusFilter === label.toLowerCase() || (label === 'Total' && statusFilter === 'all'))
-                ? `${color} font-semibold`
-                : 'bg-accent/20 border-border/40 text-muted-foreground hover:border-border'
-            }`}
-          >
-            <span className="text-xl font-bold">{count}</span>
-            <span className="text-[11px] font-medium">{label}</span>
-          </button>
-        ))}
+      <div className="relative max-w-md mb-6">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by order ID or name..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9 bg-accent/30 border-border/50"
+        />
       </div>
 
-      {/* Table or empty state */}
-      {filtered.length === 0 ? (
-        <EmptyState
-          type={statusFilter === 'all' ? 'orders' : 'results'}
-          description={
-            statusFilter === 'all'
-              ? 'Your order history will appear here once you place an order.'
-              : `No orders with status "${statusFilter}". Try a different filter.`
-          }
-          actionLabel={statusFilter !== 'all' ? 'Clear filter' : undefined}
-          onAction={statusFilter !== 'all' ? () => setStatusFilter('all') : undefined}
-          className="glass rounded-2xl border border-border/50"
-        />
+      {isError ? (
+        <ErrorState onRetry={() => refetch()} />
+      ) : isLoading ? (
+        <TableSkeleton rows={6} cols={6} />
+      ) : filtered.length === 0 ? (
+        <EmptyState type="orders" description="You have no orders yet." className="glass rounded-xl border border-border/50" />
       ) : (
-        <div className="space-y-2">
-          <OrderTable orders={filtered} />
-          <p className="text-xs text-muted-foreground text-right px-1">
-            Showing {filtered.length} of {orders.length} orders
-          </p>
+        <OrderTable orders={filtered} />
+      )}
+
+      {data && data.pagination.totalPages > 1 && (
+        <div className="flex justify-center gap-2 mt-6">
+          <button
+            type="button"
+            className="text-sm text-primary disabled:opacity-40"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            Previous
+          </button>
+          <span className="text-sm text-muted-foreground">
+            Page {page} / {data.pagination.totalPages}
+          </span>
+          <button
+            type="button"
+            className="text-sm text-primary disabled:opacity-40"
+            disabled={page >= data.pagination.totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </button>
         </div>
       )}
     </div>

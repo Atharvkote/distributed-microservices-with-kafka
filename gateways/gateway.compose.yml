@@ -15,7 +15,12 @@ services:
       - "8000:8000"
       - "8001:8001"
     volumes:
-      - ../micro-services/kong-manifest.yml:/usr/local/kong/declarative/kong.yml
+      - ./kong-manifest.yml:/usr/local/kong/declarative/kong.yml
     command: ["kong", "start", "--conf", "/etc/kong/kong.conf.default", "--v"]
     networks:
       - vendex-infra
+
+networks:
+  vendex-infra:
+    external: true
+

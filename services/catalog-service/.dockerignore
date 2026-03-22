@@ -9,6 +9,11 @@ pnpm-debug.log
 .env
 .env.*
 .env.local
+.env.local.*
+.env.development.*
+.env.development
+.env.production.*
+.env.production
 
 dist
 build

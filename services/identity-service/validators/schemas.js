@@ -5,7 +5,9 @@ const signUpSchema = z.object({
   email: z.string().email({ message: "Invalid email address" }),
   password: z
     .string()
-    .min(6, { message: "Password must be at least 6 characters" }),
+    .min(8, { message: "Password must be at least 8 characters" })
+    .regex(/[A-Za-z]/, { message: "Password must include a letter" })
+    .regex(/[0-9]/, { message: "Password must include a number" }),
   full_name: z.string().min(1, { message: "Full name is required" }),
   profile_picture: z.string().url().optional(),
   phone: z.string().optional(),

@@ -8,11 +8,18 @@ import { Star, X, SlidersHorizontal } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
-const categories = ['Electronics', 'Fashion', 'Home & Decor', 'Sports', 'Food & Drink', 'Books', 'Beauty'];
+const fallbackCategories = ['Electronics', 'Fashion', 'Home & Decor', 'Sports', 'Food & Drink', 'Books', 'Beauty'];
+
+export interface CategoryOption {
+  id: string;
+  name: string;
+}
 
 interface FilterSidebarProps {
   className?: string;
   onFilterChange?: (filters: FilterState) => void;
+  /** When set, category values are Mongo ids (API filter). */
+  categoryOptions?: CategoryOption[];
 }
 
 export interface FilterState {
@@ -21,15 +28,19 @@ export interface FilterState {
   minRating: number;
 }
 
-const FilterSidebar: React.FC<FilterSidebarProps> = ({ className, onFilterChange }) => {
+const FilterSidebar: React.FC<FilterSidebarProps> = ({ className, onFilterChange, categoryOptions }) => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 500]);
   const [minRating, setMinRating] = useState(0);
 
-  const handleCategoryToggle = (cat: string) => {
-    const updated = selectedCategories.includes(cat)
-      ? selectedCategories.filter((c) => c !== cat)
-      : [...selectedCategories, cat];
+  const labels = categoryOptions?.length
+    ? categoryOptions
+    : fallbackCategories.map((name) => ({ id: name, name }));
+
+  const handleCategoryToggle = (id: string) => {
+    const updated = selectedCategories.includes(id)
+      ? selectedCategories.filter((c) => c !== id)
+      : [...selectedCategories, id];
     setSelectedCategories(updated);
     onFilterChange?.({ categories: updated, priceRange, minRating });
   };
@@ -61,20 +72,22 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ className, onFilterChange
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* Categories */}
         <div className="space-y-3">
           <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Categories</h4>
           <div className="space-y-2">
-            {categories.map((cat) => (
-              <div key={cat} className="flex items-center gap-2">
+            {labels.map((cat) => (
+              <div key={cat.id} className="flex items-center gap-2">
                 <Checkbox
-                  id={`cat-${cat}`}
-                  checked={selectedCategories.includes(cat)}
-                  onCheckedChange={() => handleCategoryToggle(cat)}
+                  id={`cat-${cat.id}`}
+                  checked={selectedCategories.includes(cat.id)}
+                  onCheckedChange={() => handleCategoryToggle(cat.id)}
                   className="border-border/50 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                 />
-                <Label htmlFor={`cat-${cat}`} className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
-                  {cat}
+                <Label
+                  htmlFor={`cat-${cat.id}`}
+                  className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                >
+                  {cat.name}
                 </Label>
               </div>
             ))}
@@ -83,18 +96,21 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ className, onFilterChange
 
         <Separator className="opacity-30" />
 
-        {/* Price Range */}
         <div className="space-y-3">
           <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Price Range</h4>
           <Slider
             value={priceRange}
             min={0}
             max={500}
-            step={10}
-            onValueChange={(v) => setPriceRange(v as [number, number])}
+            step={5}
+            onValueChange={(v) => {
+              const next = v as [number, number];
+              setPriceRange(next);
+              onFilterChange?.({ categories: selectedCategories, priceRange: next, minRating });
+            }}
             className="py-2"
           />
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex justify-between text-xs text-muted-foreground">
             <span>${priceRange[0]}</span>
             <span>${priceRange[1]}</span>
           </div>
@@ -102,20 +118,26 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ className, onFilterChange
 
         <Separator className="opacity-30" />
 
-        {/* Rating */}
         <div className="space-y-3">
-          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Min Rating</h4>
-          <div className="flex gap-1.5">
-            {[1, 2, 3, 4, 5].map((r) => (
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Minimum Rating</h4>
+          <div className="flex items-center gap-2">
+            {[1, 2, 3, 4, 5].map((star) => (
               <button
-                key={r}
-                onClick={() => setMinRating(r === minRating ? 0 : r)}
-                className="p-1 hover:scale-110 transition-transform"
+                key={star}
+                type="button"
+                onClick={() => {
+                  const next = star === minRating ? 0 : star;
+                  setMinRating(next);
+                  onFilterChange?.({ categories: selectedCategories, priceRange, minRating: next });
+                }}
+                className="p-1 rounded-md hover:bg-accent/50 transition-colors"
               >
-                <Star className={cn(
-                  'h-5 w-5 transition-colors',
-                  r <= minRating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'
-                )} />
+                <Star
+                  className={cn(
+                    'h-5 w-5',
+                    star <= minRating ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'
+                  )}
+                />
               </button>
             ))}
           </div>

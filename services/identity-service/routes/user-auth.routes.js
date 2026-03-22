@@ -13,7 +13,7 @@ const userAuthRouter = Router();
 // User Auth Routes
 userAuthRouter.post("/login", LoginController);
 userAuthRouter.post("/signup", SignUpController);
-userAuthRouter.post("/logout", LogOutController);
+userAuthRouter.post("/logout", authMiddleware, LogOutController);
 
 // Oauth Rotues
 userAuthRouter.post("/oAuth", OauthController);

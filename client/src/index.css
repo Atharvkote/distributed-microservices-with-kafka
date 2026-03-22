@@ -114,7 +114,7 @@
    THEME MAPPING
 ───────────────────────────────────────── */
 @theme inline {
-    --font-mono: 'JetBrains Mono Variable', monospace;
+    --font-mono: 'Google Sans Flex', monospace;
     --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 
     --color-sidebar-ring: var(--sidebar-ring);
@@ -296,4 +296,31 @@
   );
   background-size: 200% 100%;
   animation: shimmer 1.8s linear infinite;
+}
+
+.carattere-regular {
+  font-family: "Carattere", cursive;
+  font-weight: 400;
+  font-style: normal;
+}
+
+
+.figtree-variable {
+  font-family: "Figtree", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+}
+
+
+.google-sans-flex {
+  font-family: "Google Sans Flex", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+  font-variation-settings:
+    "slnt" 0,
+    "wdth" 100,
+    "GRAD" 0,
+    "ROND" 0;
 }

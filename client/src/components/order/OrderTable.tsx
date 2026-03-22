@@ -7,10 +7,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import type { Order } from '@/services/api';
+import type { UiOrder } from '@/types/commerce';
+import { formatMoney } from '@/lib/money';
 
 interface OrderTableProps {
-  orders: Order[];
+  orders: UiOrder[];
   showCustomer?: boolean;
   onViewOrder?: (id: string) => void;
 }
@@ -21,6 +22,8 @@ const statusStyles: Record<string, string> = {
   shipped: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
   delivered: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
   cancelled: 'bg-red-500/10 text-red-400 border-red-500/20',
+  confirmed: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+  refunded: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20',
 };
 
 const OrderTable: React.FC<OrderTableProps> = ({ orders, showCustomer = false, onViewOrder }) => {
@@ -40,15 +43,18 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, showCustomer = false, o
         </TableHeader>
         <TableBody>
           {orders.map((order) => (
-            <TableRow key={order.id} className="border-border/30 hover:bg-accent/30 transition-colors">
+            <TableRow key={order.mongoId} className="border-border/30 hover:bg-accent/30 transition-colors">
               <TableCell className="font-mono text-xs text-primary">{order.id}</TableCell>
               {showCustomer && <TableCell className="text-sm">{order.customerName}</TableCell>}
               <TableCell className="text-sm">
                 {order.items.length} item{order.items.length !== 1 ? 's' : ''}
               </TableCell>
-              <TableCell className="font-semibold text-sm">${order.total.toFixed(2)}</TableCell>
+              <TableCell className="font-semibold text-sm">{formatMoney(order.total)}</TableCell>
               <TableCell>
-                <Badge variant="outline" className={cn('text-[10px]', statusStyles[order.status])}>
+                <Badge
+                  variant="outline"
+                  className={cn('text-[10px]', statusStyles[order.status] ?? statusStyles.pending)}
+                >
                   {order.status}
                 </Badge>
               </TableCell>

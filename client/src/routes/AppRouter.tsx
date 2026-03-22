@@ -34,6 +34,7 @@ const RevenueAnalytics = React.lazy(() => import('@/pages/admin/RevenueAnalytics
 
 // Auth pages
 const LoginPage = React.lazy(() => import('@/pages/auth/LoginPage'));
+const RegisterPage = React.lazy(() => import('@/pages/auth/RegisterPage'));
 
 function PageLoader() {
   return (
@@ -57,6 +58,7 @@ const AppRouter: React.FC = () => {
         {/* Auth routes */}
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
         </Route>
 
         {/* Public customer routes */}
