@@ -10,6 +10,11 @@ import { getWelcomeEmailTemplate } from "./templates/user-created.template.js";
 import { getUserAccountClosedEmailTemplate } from "./templates/user.deleted.template.js";
 import { getVendorWelcomeEmailTemplate } from "./templates/vendor-created.template.js";
 import { getProfileUpdatedEmailTemplate } from "./templates/vendor-profile-updated.template.js";
+import {
+  getOrderPlacedTemplate,
+  getPaymentSuccessTemplate,
+  getPaymentFailedTemplate,
+} from "./templates/order.template.js";
 
 let redisClient = null;
 try {
@@ -40,6 +45,33 @@ new Worker(
   "email-queue",
   async (job) => {
     switch (job.name) {
+      case "ORDER_CREATED":
+        await sendMail({
+          to: job.data.to,
+          subject: `Order Placed - ${job.data.orderId}`,
+          html: getOrderPlacedTemplate(job.data.orderId, job.data.total),
+        });
+        logger.info(`Email sent to ${job.data.to} for ORDER_CREATED`);
+        break;
+
+      case "PAYMENT_SUCCESS":
+        await sendMail({
+          to: job.data.to,
+          subject: `Payment Successful - Order ${job.data.orderId}`,
+          html: getPaymentSuccessTemplate(job.data.orderId, job.data.total, job.data.transactionId),
+        });
+        logger.info(`Email sent to ${job.data.to} for PAYMENT_SUCCESS`);
+        break;
+
+      case "PAYMENT_FAILED":
+        await sendMail({
+          to: job.data.to,
+          subject: `Payment Failed - Order ${job.data.orderId}`,
+          html: getPaymentFailedTemplate(job.data.orderId),
+        });
+        logger.info(`Email sent to ${job.data.to} for PAYMENT_FAILED`);
+        break;
+
       case "USER_CREATED":
         await sendMail({
           to: job.data.to,

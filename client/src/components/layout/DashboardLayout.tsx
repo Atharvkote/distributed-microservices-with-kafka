@@ -5,6 +5,7 @@ import TopBar from './TopBar';
 import Breadcrumbs from './Breadcrumbs';
 import MobileMenu from './MobileMenu';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { RoleSwitcher } from '@/components/auth/RoleSwitcher';
 
 interface DashboardLayoutProps {
   variant: 'vendor' | 'admin';
@@ -18,9 +19,8 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ variant }) => {
 
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar showSearch={true} showCart={false} />
-
         <ScrollArea className="flex-1">
-          <main className="p-4 md:p-6 lg:p-8">
+          <main className="px-4 md:p-6 lg:p-8">
             <Breadcrumbs />
             <Outlet />
           </main>

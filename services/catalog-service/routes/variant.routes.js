@@ -6,14 +6,22 @@ import {
   deleteProductVariant,
   getProductAllVariant,
   getProductVariant,
+  getVendorProductAllVariants,
   updateProductVariant,
 } from "../controllers/variant.controller.js";
 
 const router = Router();
 
+// Vendor routes before /:id
+router.get(
+  "/vendor/product/:productId",
+  authMiddleware,
+  getVendorProductAllVariants
+);
+
 // Public routes
-router.get("/:id", getProductVariant);
 router.get("/product/:productId", getProductAllVariant);
+router.get("/:id", getProductVariant);
 
 // Vendor routes (protected)
 router.post(

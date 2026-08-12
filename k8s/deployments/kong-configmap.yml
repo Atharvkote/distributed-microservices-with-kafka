@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-declarative-config
+data:
+  kong.yml: |
+    _format_version: "3.0"
+
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          headers:
+            - "*"
+          credentials: true
+
+    services:
+      - name: identity-service
+        url: http://identity-service:80
+        routes:
+          - name: identity-route
+            paths:
+              - /auth
+            strip_path: true
+
+      - name: analytics-service
+        url: http://analytics-service:80
+        routes:
+          - name: analytics-route
+            paths:
+              - /analytics
+            strip_path: true
+
+      - name: messaging-service
+        url: http://messaging-service:80
+        routes:
+          - name: messaging-route
+            paths:
+              - /messages
+            strip_path: true
+
+      - name: payment-service
+        url: http://payment-service:80
+        routes:
+          - name: payment-route
+            paths:
+              - /payments
+            strip_path: true
+
+      - name: order-service
+        url: http://order-service:80
+        routes:
+          - name: order-route
+            paths:
+              - /orders
+            strip_path: true
+
+      - name: catalog-service
+        url: http://catalog-service:80
+        routes:
+          - name: catalog-route
+            paths:
+              - /catalog
+            strip_path: true

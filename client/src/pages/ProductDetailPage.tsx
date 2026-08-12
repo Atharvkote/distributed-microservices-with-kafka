@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -11,21 +11,45 @@ import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProductQuery } from '@/hooks/useCatalog';
 import { mapCatalogDetail } from '@/lib/catalog-mappers';
-import type { CatalogVariant } from '@/api/catalog.api';
+import type { CatalogVariant, VendorStoreRef } from '@/api/catalog.api';
 import { formatMoney } from '@/lib/money';
 import { toast } from 'sonner';
-import EmptyState from '@/components/common/EmptyState';
+import { Textarea } from '@/components/ui/textarea';
+import { useAuthStore } from '@/store/authStore';
+import {
+  useAddReviewMutation,
+  useDeleteReviewMutation,
+  useProductReviewsQuery,
+  useUpdateReviewMutation,
+} from '@/hooks/useReviews';
 
 const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { data, isLoading, isError } = useProductQuery(id);
   const [quantity, setQuantity] = useState(1);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [selectedVariantId, setSelectedVariantId] = useState<string | undefined>();
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
   const addItem = useCartStore((s) => s.addItem);
+  const user = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const [draftRating, setDraftRating] = useState(5);
+  const [draftComment, setDraftComment] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editRating, setEditRating] = useState(5);
+  const [editComment, setEditComment] = useState('');
+  const reviewsQ = useProductReviewsQuery(id, { page: 1, limit: 20 });
+  const addReview = useAddReviewMutation(id ?? '');
+  const updateReview = useUpdateReviewMutation(id ?? '');
+  const deleteReview = useDeleteReviewMutation(id ?? '');
 
   const product = useMemo(() => (data ? mapCatalogDetail(data) : null), [data]);
   const variants: CatalogVariant[] = data?.product?.variants ?? [];
+
+  const vendorPopulated = data?.product?.vendor;
+  const vendorStore: VendorStoreRef | null =
+    vendorPopulated && typeof vendorPopulated === 'object' ? (vendorPopulated as VendorStoreRef) : null;
 
   React.useEffect(() => {
     if (variants.length && !selectedVariantId) {
@@ -35,13 +59,38 @@ const ProductDetailPage: React.FC = () => {
 
   const selectedVariant = variants.find((v) => v._id === selectedVariantId) ?? variants[0];
 
-  const displayPrice = selectedVariant?.price?.sellingPrice ?? selectedVariant?.price?.mrp ?? product?.price ?? 0;
+  React.useEffect(() => {
+    setActiveImageIndex(0);
+  }, [selectedVariantId]);
+
+  const displayPrice =
+    selectedVariant?.price?.sellingPrice ?? selectedVariant?.price?.mrp ?? product?.price ?? 0;
   const displayMrp = selectedVariant?.price?.mrp;
-  const mainImage = selectedVariant?.images?.[0]?.url ?? product?.image;
+  const variantImages = selectedVariant?.images ?? [];
+  const mainFromVariant = variantImages[0]?.url ?? product?.image;
+  const galleryUrls =
+    variantImages.length > 0
+      ? variantImages.map((i) => i.url).filter(Boolean)
+      : mainFromVariant
+        ? [mainFromVariant]
+        : [];
+
+  const mainImage = galleryUrls[activeImageIndex] ?? mainFromVariant ?? product?.image;
+
+  const variantLabel = (v: CatalogVariant) => {
+    const attrs = v.attributes ?? {};
+    const kv = Object.entries(attrs)
+      .slice(0, 2)
+      .map(([k, val]) => `${k}: ${val}`)
+      .join(' · ');
+    return kv || v.sku || v._id.slice(-6);
+  };
+
+  const attributeEntries = Object.entries(selectedVariant?.attributes ?? {});
 
   if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 md:px-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           <Skeleton className="aspect-square rounded-2xl" />
           <div className="space-y-4">
@@ -69,6 +118,44 @@ const ProductDetailPage: React.FC = () => {
       ? Math.round(((displayMrp - displayPrice) / displayMrp) * 100)
       : 0;
 
+  const displayVendorName = vendorStore?.store_name?.trim() || product.vendorName;
+  const displayVendorLogo = vendorStore?.store_logo?.trim();
+  const displayVendorRating =
+    typeof vendorStore?.ratings === 'number' ? vendorStore.ratings : product.vendorRating;
+  const vendorId =
+    (vendorStore?._id && String(vendorStore._id)) || (product.vendorId && product.vendorId !== 'vendor' ? product.vendorId : '');
+
+  const reviews = reviewsQ.data?.reviews ?? [];
+  const myReview =
+    user?.id ? reviews.find((r) => (typeof r.user === 'string' ? r.user : r.user?._id) === user.id) : undefined;
+
+  const submitReview = async () => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to add a review');
+      navigate('/login');
+      return;
+    }
+    try {
+      await addReview.mutateAsync({ rating: draftRating, comment: draftComment.trim() });
+      setDraftComment('');
+      setDraftRating(5);
+      toast.success('Review added');
+    } catch {
+      toast.error('Unable to add review');
+    }
+  };
+
+  const submitUpdate = async () => {
+    if (!editingId) return;
+    try {
+      await updateReview.mutateAsync({ id: editingId, rating: editRating, comment: editComment.trim() });
+      setEditingId(null);
+      toast.success('Review updated');
+    } catch {
+      toast.error('Unable to update review');
+    }
+  };
+
   const handleAddToCart = () => {
     if (!selectedVariantId && variants.length > 0) {
       toast.error('Please select a variant');
@@ -82,7 +169,7 @@ const ProductDetailPage: React.FC = () => {
       name: product.name,
       price: displayPrice,
       image: mainImage ?? product.image,
-      vendorName: product.vendorName,
+      vendorName: displayVendorName,
       quantity,
     });
     toast.success('Added to cart');
@@ -91,12 +178,31 @@ const ProductDetailPage: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-        <div className="glass rounded-2xl border border-border/50 overflow-hidden aspect-square">
-          <img
-            src={mainImage}
-            alt={product.name}
-            className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
-          />
+        <div className="space-y-3">
+          <div className="glass rounded-2xl border border-border/50 overflow-hidden aspect-square">
+            <img
+              src={mainImage}
+              alt={product.name}
+              className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+            />
+          </div>
+          {galleryUrls.length > 1 && (
+            <div className="flex flex-wrap gap-2">
+              {galleryUrls.map((url, idx) => (
+                <button
+                  key={`${url}-${idx}`}
+                  type="button"
+                  onClick={() => setActiveImageIndex(idx)}
+                  className={cn(
+                    'h-16 w-16 rounded-lg overflow-hidden border-2 transition-colors shrink-0',
+                    activeImageIndex === idx ? 'border-primary ring-2 ring-primary/30' : 'border-border/40 opacity-80 hover:opacity-100'
+                  )}
+                >
+                  <img src={url} alt="" className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -144,8 +250,22 @@ const ProductDetailPage: React.FC = () => {
                     onClick={() => setSelectedVariantId(v._id)}
                     className="text-xs"
                   >
-                    {v.sku || v.attributes?.color || v._id.slice(-6)}
+                    {variantLabel(v)}
                   </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {attributeEntries.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Details</p>
+              <div className="flex flex-wrap gap-2">
+                {attributeEntries.map(([key, val]) => (
+                  <Badge key={key} variant="secondary" className="font-normal text-xs">
+                    <span className="text-muted-foreground mr-1">{key}:</span>
+                    {val}
+                  </Badge>
                 ))}
               </div>
             </div>
@@ -155,18 +275,32 @@ const ProductDetailPage: React.FC = () => {
 
           <p className="text-muted-foreground leading-relaxed">{product.description}</p>
 
-          <div className="flex items-center gap-3 glass rounded-xl p-4 border border-border/50">
+          <button
+            type="button"
+            onClick={() => vendorId && navigate(`/vendors/${vendorId}`)}
+            className="w-full text-left flex items-center gap-3 glass rounded-xl p-4 border border-border/50 hover:border-primary/40 transition-colors"
+          >
             <Avatar className="h-10 w-10 border border-primary/30">
-              <AvatarImage src={`https://api.dicebear.com/9.x/initials/svg?seed=${product.vendorName}`} />
-              <AvatarFallback className="gradient-primary text-white text-xs">{product.vendorName[0]}</AvatarFallback>
+              <AvatarImage src={displayVendorLogo || undefined} alt={displayVendorName} />
+              <AvatarFallback className="gradient-primary text-white text-xs">
+                {displayVendorName[0]?.toUpperCase() ?? 'S'}
+              </AvatarFallback>
             </Avatar>
-            <div>
-              <p className="text-sm font-medium">{product.vendorName}</p>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Store className="h-3 w-3" /> Verified Seller
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium truncate">{displayVendorName}</p>
+              <p className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1">
+                  <Store className="h-3 w-3" /> Store
+                </span>
+                {displayVendorRating != null && displayVendorRating > 0 && (
+                  <span className="inline-flex items-center gap-0.5">
+                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                    {displayVendorRating.toFixed(1)}
+                  </span>
+                )}
               </p>
             </div>
-          </div>
+          </button>
 
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2 glass rounded-lg border border-border/50 p-1">
@@ -233,12 +367,112 @@ const ProductDetailPage: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="reviews" className="mt-6">
-          <EmptyState
-            type="products"
-            title="Reviews"
-            description="Product reviews are served by the catalog reviews API. Connect review endpoints to show live feedback."
-            className="glass rounded-xl border border-border/50"
-          />
+          <div className="glass rounded-xl border border-border/50 p-5 space-y-5">
+            {!myReview && (
+              <div className="space-y-3 border border-border/40 rounded-lg p-4">
+                <p className="font-medium">Write a review</p>
+                <div className="flex items-center gap-2">
+                  {Array.from({ length: 5 }).map((_, idx) => (
+                    <Button
+                      key={idx}
+                      type="button"
+                      size="sm"
+                      variant={idx + 1 <= draftRating ? 'default' : 'outline'}
+                      onClick={() => setDraftRating(idx + 1)}
+                    >
+                      {idx + 1}
+                    </Button>
+                  ))}
+                </div>
+                <Textarea
+                  value={draftComment}
+                  onChange={(e) => setDraftComment(e.target.value)}
+                  placeholder="Share your experience with this product"
+                />
+                <Button onClick={submitReview} disabled={addReview.isPending}>
+                  Submit review
+                </Button>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {reviews.map((r) => {
+                const uid = typeof r.user === 'string' ? r.user : r.user?._id;
+                const canEdit = user?.id && uid === user.id;
+                const isEditing = editingId === r._id;
+                const author =
+                  typeof r.user === 'string' ? 'User' : r.user?.full_name || r.user?.email || 'User';
+                return (
+                  <div key={r._id} className="rounded-lg border border-border/40 p-4 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium">{author}</p>
+                      <div className="text-sm inline-flex items-center gap-1">
+                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                        {r.rating}
+                      </div>
+                    </div>
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          {Array.from({ length: 5 }).map((_, idx) => (
+                            <Button
+                              key={idx}
+                              type="button"
+                              size="sm"
+                              variant={idx + 1 <= editRating ? 'default' : 'outline'}
+                              onClick={() => setEditRating(idx + 1)}
+                            >
+                              {idx + 1}
+                            </Button>
+                          ))}
+                        </div>
+                        <Textarea value={editComment} onChange={(e) => setEditComment(e.target.value)} />
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={submitUpdate} disabled={updateReview.isPending}>
+                            Save
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{r.comment || 'No comment provided.'}</p>
+                    )}
+                    {canEdit && !isEditing && (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingId(r._id);
+                            setEditRating(r.rating);
+                            setEditComment(r.comment || '');
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={async () => {
+                            try {
+                              await deleteReview.mutateAsync(r._id);
+                              toast.success('Review deleted');
+                            } catch {
+                              toast.error('Unable to delete review');
+                            }
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="shipping" className="mt-6 glass rounded-xl p-6 border border-border/50">

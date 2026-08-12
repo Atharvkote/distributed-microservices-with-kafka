@@ -159,6 +159,20 @@ export const updateStockZod = z.object({
   }),
 });
 
+export const bulkUpdateStockZod = z.object({
+  body: z.object({
+    updates: z
+      .array(
+        z.object({
+          variantId: objectIdSchema,
+          delta: z.number().int(),
+        })
+      )
+      .min(1)
+      .max(100),
+  }),
+});
+
 // Review Validation Schemas
 export const addReviewZod = z.object({
   body: z.object({

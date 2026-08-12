@@ -7,7 +7,7 @@ export const startConsumption = async () => {
     const consumer = getKafkaConsumer();
     
     await consumer.subscribe({
-      topics: ["order"],
+      topics: ["order", "payment"],
       fromBeginning: false,
     });
 
@@ -24,11 +24,14 @@ export const startConsumption = async () => {
             return;
           }
 
-          const topicHandlers = eventRegistry[topic];
-          if (!topicHandlers) {
-            kafkaLogger.warn(`${prefix} No handlers registered for topic`);
-            return;
-          }
+        // Catalog sync events are published to topic "order" in catalog-service
+        const topicHandlers =
+          eventRegistry[topic] ||
+          (topic === "order" ? eventRegistry.catalog : null);
+        if (!topicHandlers) {
+          kafkaLogger.warn(`${prefix} No handlers registered for topic`);
+          return;
+        }
 
           const handler = topicHandlers[eventType];
           if (!handler) {

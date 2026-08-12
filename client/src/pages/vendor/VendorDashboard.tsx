@@ -10,17 +10,24 @@ import ErrorState from '@/components/common/ErrorState';
 import EmptyState from '@/components/common/EmptyState';
 import { useOrdersQuery } from '@/hooks/useOrders';
 import { mapOrderRecord } from '@/types/commerce';
-import { ordersToTrendData } from '@/lib/orders-analytics';
 import { useAuthStore } from '@/store/authStore';
 import { formatMoney } from '@/lib/money';
+import { vendorOrdersSubtotal, vendorOrdersToTrendData } from '@/lib/vendor-order-totals';
+import { useVendorProductsQuery } from '@/hooks/useVendorCatalog';
 
 const VendorDashboard: React.FC = () => {
   const user = useAuthStore((s) => s.user);
-  const { data, isLoading, isError, refetch } = useOrdersQuery({ page: 1, limit: 100 });
+  const vendorId = useAuthStore((s) => s.vendorId);
+  const { data, isLoading, isError, refetch } = useOrdersQuery({
+    page: 1,
+    limit: 100,
+    vendorScope: 'me',
+  });
+  const { data: productsPage } = useVendorProductsQuery(1);
 
   const orders = data?.orders ?? [];
-  const chartData = useMemo(() => ordersToTrendData(orders), [orders]);
-  const revenue = useMemo(() => orders.reduce((s, o) => s + o.total, 0), [orders]);
+  const chartData = useMemo(() => vendorOrdersToTrendData(orders, vendorId), [orders, vendorId]);
+  const revenue = useMemo(() => vendorOrdersSubtotal(orders, vendorId), [orders, vendorId]);
   const customers = useMemo(() => new Set(orders.map((o) => String(o.customerId))).size, [orders]);
 
   const recent = useMemo(
@@ -46,9 +53,13 @@ const VendorDashboard: React.FC = () => {
           Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)
         ) : (
           <>
-            <MetricCard title="Revenue (sample)" value={formatMoney(revenue)} icon={DollarSign} />
+            <MetricCard title="Attributed revenue" value={formatMoney(revenue)} icon={DollarSign} />
             <MetricCard title="Orders" value={String(orders.length)} icon={ShoppingCart} />
-            <MetricCard title="Active products" value="—" icon={Package} />
+            <MetricCard
+              title="Products"
+              value={String(productsPage?.pagination.total ?? 0)}
+              icon={Package}
+            />
             <MetricCard title="Customers (unique)" value={String(customers)} icon={Users} />
           </>
         )}

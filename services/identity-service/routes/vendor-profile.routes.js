@@ -15,12 +15,14 @@ import { authMiddleware } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
+// Public route
+router.get("/summary/:vendorId", getVendorProfileSummary);
+
 router.use(authMiddleware);
 
 router.post("/", createVendorProfile);
 
 router.get("/", getVendorProfile);
-router.get("/summary/:vendorId", getVendorProfileSummary);
 
 router.patch("/", updateVendorProfile);
 router.patch("/complete", completeVendorProfile);

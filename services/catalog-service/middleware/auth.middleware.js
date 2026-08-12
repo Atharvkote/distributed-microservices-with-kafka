@@ -26,6 +26,7 @@ export const authMiddleware = (req, res, next) => {
       id: decoded.sub,
       isVendor: decoded.isVendor,
       email: decoded.email,
+      role: decoded.role ?? "USER",
       full_name: decoded.full_name,
       vendorId: decoded.vendorId ?? null,
     };
@@ -35,4 +36,18 @@ export const authMiddleware = (req, res, next) => {
     logger.error("JWT verification failed:", err);
     return res.status(401).json({ message: "Invalid token" });
   }
+};
+
+export const requireRole = (allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const userRole = req.user.role || "USER";
+    const rolesArray = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+    if (!rolesArray.includes(userRole)) {
+      return res.status(403).json({ message: "Forbidden: Access denied" });
+    }
+    next();
+  };
 };

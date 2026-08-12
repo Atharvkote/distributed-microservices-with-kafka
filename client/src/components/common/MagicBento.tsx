@@ -45,7 +45,7 @@ const cardData = [
   }
 ];
 
-const createParticleElement = (x, y, color = DEFAULT_GLOW_COLOR) => {
+const createParticleElement = (x: any, y: any, color: any = DEFAULT_GLOW_COLOR) => {
   const el = document.createElement('div');
   el.className = 'particle';
   el.style.cssText = `
@@ -63,12 +63,12 @@ const createParticleElement = (x, y, color = DEFAULT_GLOW_COLOR) => {
   return el;
 };
 
-const calculateSpotlightValues = radius => ({
+const calculateSpotlightValues = (radius: any) => ({
   proximity: radius * 0.5,
   fadeDistance: radius * 0.75
 });
 
-const updateCardGlowProperties = (card, mouseX, mouseY, glow, radius) => {
+const updateCardGlowProperties = (card: any, mouseX: any, mouseY: any, glow: any, radius: any) => {
   const rect = card.getBoundingClientRect();
   const relativeX = ((mouseX - rect.left) / rect.width) * 100;
   const relativeY = ((mouseY - rect.top) / rect.height) * 100;
@@ -89,14 +89,14 @@ const ParticleCard = ({
   enableTilt = true,
   clickEffect = false,
   enableMagnetism = false
-}) => {
-  const cardRef = useRef(null);
-  const particlesRef = useRef([]);
-  const timeoutsRef = useRef([]);
+}: any) => {
+  const cardRef = useRef<any>(null);
+  const particlesRef = useRef<any[]>([]);
+  const timeoutsRef = useRef<any[]>([]);
   const isHoveredRef = useRef(false);
-  const memoizedParticles = useRef([]);
+  const memoizedParticles = useRef<any[]>([]);
   const particlesInitialized = useRef(false);
-  const magnetismAnimationRef = useRef(null);
+  const magnetismAnimationRef = useRef<any>(null);
 
   const initializeParticles = useCallback(() => {
     if (particlesInitialized.current || !cardRef.current) return;
@@ -113,7 +113,7 @@ const ParticleCard = ({
     timeoutsRef.current = [];
     magnetismAnimationRef.current?.kill();
 
-    particlesRef.current.forEach(particle => {
+    particlesRef.current.forEach((particle: any) => {
       gsap.to(particle, {
         scale: 0,
         opacity: 0,
@@ -134,7 +134,7 @@ const ParticleCard = ({
       initializeParticles();
     }
 
-    memoizedParticles.current.forEach((particle, index) => {
+    memoizedParticles.current.forEach((particle: any, index: any) => {
       const timeoutId = setTimeout(() => {
         if (!isHoveredRef.current || !cardRef.current) return;
 
@@ -210,7 +210,7 @@ const ParticleCard = ({
       }
     };
 
-    const handleMouseMove = e => {
+    const handleMouseMove = (e: any) => {
       if (!enableTilt && !enableMagnetism) return;
 
       const rect = element.getBoundingClientRect();
@@ -245,7 +245,7 @@ const ParticleCard = ({
       }
     };
 
-    const handleClick = e => {
+    const handleClick = (e: any) => {
       if (!clickEffect) return;
 
       const rect = element.getBoundingClientRect();
@@ -322,8 +322,8 @@ const GlobalSpotlight = ({
   enabled = true,
   spotlightRadius = DEFAULT_SPOTLIGHT_RADIUS,
   glowColor = DEFAULT_GLOW_COLOR
-}) => {
-  const spotlightRef = useRef(null);
+}: any) => {
+  const spotlightRef = useRef<any>(null);
   const isInsideSection = useRef(false);
 
   useEffect(() => {
@@ -353,7 +353,7 @@ const GlobalSpotlight = ({
     document.body.appendChild(spotlight);
     spotlightRef.current = spotlight;
 
-    const handleMouseMove = e => {
+    const handleMouseMove = (e: any) => {
       if (!spotlightRef.current || !gridRef.current) return;
 
       const section = gridRef.current.closest('.bento-section');
@@ -370,7 +370,7 @@ const GlobalSpotlight = ({
           duration: 0.3,
           ease: 'power2.out'
         });
-        cards.forEach(card => {
+        cards.forEach((card: any) => {
           card.style.setProperty('--glow-intensity', '0');
         });
         return;
@@ -379,7 +379,7 @@ const GlobalSpotlight = ({
       const { proximity, fadeDistance } = calculateSpotlightValues(spotlightRadius);
       let minDistance = Infinity;
 
-      cards.forEach(card => {
+      cards.forEach((card: any) => {
         const cardElement = card;
         const cardRect = cardElement.getBoundingClientRect();
         const centerX = cardRect.left + cardRect.width / 2;
@@ -423,7 +423,7 @@ const GlobalSpotlight = ({
 
     const handleMouseLeave = () => {
       isInsideSection.current = false;
-      gridRef.current?.querySelectorAll('.card').forEach(card => {
+      gridRef.current?.querySelectorAll('.card').forEach((card: any) => {
         card.style.setProperty('--glow-intensity', '0');
       });
       if (spotlightRef.current) {
@@ -448,7 +448,7 @@ const GlobalSpotlight = ({
   return null;
 };
 
-const BentoCardGrid = ({ children, gridRef }) => (
+const BentoCardGrid = ({ children, gridRef }: any) => (
   <div
     className="bento-section grid gap-2 p-3 max-w-[54rem] select-none relative"
     style={{ fontSize: 'clamp(1rem, 0.9rem + 0.5vw, 1.5rem)' }}
@@ -634,7 +634,7 @@ const MagicBento = ({
 
       <BentoCardGrid gridRef={gridRef}>
         <div className="card-responsive grid gap-2">
-          {(categories || cardData).map((card, index) => {
+          {((categories || cardData) as any[]).map((card: any, index: number) => {
             const baseClassName = `card flex flex-col justify-between relative aspect-[4/3] min-h-[200px] w-full max-w-full p-5 rounded-[20px] border border-solid font-light overflow-hidden transition-colors duration-300 ease-in-out hover:-translate-y-0.5 hover:shadow-[0_8px_25px_rgba(0,0,0,0.15)] ${
               enableBorderGlow ? 'card--border-glow' : ''
             }`;
@@ -677,7 +677,7 @@ const MagicBento = ({
                       <div className="space-y-2">
                         <p className="text-xs font-semibold text-purple-300 uppercase tracking-wider">Featured</p>
                         <div className="grid grid-cols-2 gap-2">
-                          {card.subcategories.slice(0, 4).map((sub, idx) => (
+                          {card.subcategories.slice(0, 4).map((sub: any, idx: number) => (
                             <span
                               key={idx}
                               className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-purple-500/20 transition-colors truncate"
@@ -701,7 +701,7 @@ const MagicBento = ({
                 ref={el => {
                   if (!el) return;
 
-                  const handleMouseMove = e => {
+                  const handleMouseMove = (e: any) => {
                     if (shouldDisableAnimations) return;
 
                     const rect = el.getBoundingClientRect();
@@ -758,7 +758,7 @@ const MagicBento = ({
                     }
                   };
 
-                  const handleClick = e => {
+                  const handleClick = (e: any) => {
                     if (!clickEffect || shouldDisableAnimations) return;
 
                     const rect = el.getBoundingClientRect();
@@ -823,7 +823,7 @@ const MagicBento = ({
                     <div className="space-y-2">
                       <p className="text-xs font-semibold text-purple-300 uppercase tracking-wider">Featured</p>
                       <div className="grid grid-cols-2 gap-2">
-                        {card.subcategories.slice(0, 4).map((sub, idx) => (
+                        {card.subcategories.slice(0, 4).map((sub: any, idx: number) => (
                           <span
                             key={idx}
                             className="text-xs px-2 py-1 rounded bg-white/10 hover:bg-purple-500/20 transition-colors truncate"

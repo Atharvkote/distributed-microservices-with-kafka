@@ -8,7 +8,7 @@ import {
   deleteCategory,
   getCategoryBreadcrumbs,
 } from "../controllers/category.controller.js";
-import { authMiddleware } from "../middleware/auth.middleware.js";
+import { authMiddleware, requireRole } from "../middleware/auth.middleware.js";
 
 const router = Router();
 
@@ -20,6 +20,7 @@ router.get("/:id/breadcrumbs", getCategoryBreadcrumbs);
 
 // Admin
 router.use(authMiddleware);
+router.use(requireRole("ADMIN"));
 router.post("/", createCategory);
 router.put("/:id", updateCategory);
 router.delete("/:id", deleteCategory);

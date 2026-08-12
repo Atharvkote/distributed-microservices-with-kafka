@@ -22,7 +22,9 @@ router.patch("/update-profile-picture", updateProfilePicture);
 // GET
 router.get("/fetch-summary", getUserProfile);
 
-// DELETE
-router.delete("/complete-profile/:id", completeProfile);
+router.post("/complete-profile/:id", completeProfile);
+
+// DELETE — legacy 
+// router.delete("/complete-profile/:id", );
 
 export default router;

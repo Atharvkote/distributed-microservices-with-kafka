@@ -44,11 +44,15 @@ export const SignUpController = async (req, res) => {
       });
     }
 
+    const adminEmails = process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(",") : ["admin@vendex.com"];
+    const role = adminEmails.includes(email) ? "ADMIN" : "USER";
+
     const newUser = new UserModel({
       email,
       password,
       full_name,
       phone,
+      role,
       isAuthProviderConfiged: false,
     });
 
@@ -64,6 +68,7 @@ export const SignUpController = async (req, res) => {
       _id: savedUser._id,
       email: savedUser.email,
       full_name: savedUser.full_name,
+      role: savedUser.role || "USER",
       createdAt: savedUser.createdAt,
     };
 
@@ -77,6 +82,7 @@ export const SignUpController = async (req, res) => {
         email: savedUser.email,
         full_name: savedUser.full_name,
         phone: savedUser.phone,
+        role: savedUser.role,
       },
       token,
       accessToken: token,
@@ -148,6 +154,7 @@ export const LoginController = async (req, res) => {
         full_name: user.full_name,
         phone: user.phone,
         profile_picture: user.profile_picture,
+        role: user.role || "USER",
       },
       token,
     });

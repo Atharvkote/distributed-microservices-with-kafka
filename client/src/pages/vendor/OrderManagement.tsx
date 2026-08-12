@@ -25,7 +25,11 @@ const transitions: Record<string, string[]> = {
 
 const OrderManagement: React.FC = () => {
   const [page, setPage] = useState(1);
-  const { data, isLoading, isError, refetch } = useOrdersQuery({ page, limit: 50 });
+  const { data, isLoading, isError, refetch } = useOrdersQuery({
+    page,
+    limit: 50,
+    vendorScope: 'me',
+  });
   const { mutate, isPending } = useUpdateOrderStatusMutation();
 
   const handleStatus = (mongoId: string, backendStatus: string, next: string) => {
@@ -41,7 +45,7 @@ const OrderManagement: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold">Order Management</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Update order status via PATCH /orders/api/orders/:id/status (requires backend authorization).
+          Orders that include your line items. Status changes follow the platform workflow.
         </p>
       </div>
 
@@ -54,7 +58,7 @@ const OrderManagement: React.FC = () => {
       ) : (
         <Card className="glass border-border/50">
           <CardHeader>
-            <CardTitle className="text-base">All platform orders</CardTitle>
+            <CardTitle className="text-base">Your orders</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {orders.map((raw) => {

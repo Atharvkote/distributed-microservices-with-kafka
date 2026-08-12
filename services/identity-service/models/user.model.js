@@ -8,6 +8,7 @@ import fs from "fs";
 const userSchema = new mongoose.Schema(
   {
     email: { type: String, required: true, unique: true },
+    role: { type: String, enum: ["USER", "ADMIN"], default: "USER" },
     password: {
       type: String,
       required: function () {
@@ -86,6 +87,7 @@ userSchema.methods.generateToken = async function () {
       sub: this._id.toString(),
       email: this.email,
       full_name: this.full_name,
+      role: this.role || "USER",
 
       // vendor capability
       isVendor: !!vendorProfile,

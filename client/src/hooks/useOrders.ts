@@ -7,12 +7,15 @@ export function useOrdersQuery(params: ListOrdersParams & { page: number }) {
   return useQuery({
     queryKey: queryKeys.orders({
       customerId: params.customerId,
+      vendorScope: params.vendorScope,
       status: params.status,
       page: params.page,
+      limit: params.limit,
     }),
     queryFn: async () => {
       const { data } = await ordersApi.list({
         customerId: params.customerId,
+        vendorScope: params.vendorScope,
         status: params.status,
         page: params.page,
         limit: params.limit ?? 20,

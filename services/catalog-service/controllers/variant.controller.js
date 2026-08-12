@@ -15,6 +15,7 @@ import {
   publishVariantUpdated,
   publishVariantDeleted,
 } from "../kafka/kafka.producer.js";
+import { normalizeVariantDoc } from "../lib/variant-json.js";
 
 export const createProductVariant = async (req, res) => {
   const session = await mongoose.startSession();
@@ -29,10 +30,27 @@ export const createProductVariant = async (req, res) => {
       });
     }
 
-    // Convert product to string if it's an ObjectId
+    const raw = { ...req.body };
+    if (typeof raw.price === "string") {
+      try {
+        raw.price = JSON.parse(raw.price);
+      } catch {}
+    }
+    if (typeof raw.weight === "string") {
+      try {
+        raw.weight = JSON.parse(raw.weight);
+      } catch {}
+    }
+    if (typeof raw.attributes === "string") {
+      try {
+        raw.attributes = JSON.parse(raw.attributes);
+      } catch {
+      }
+    }
+
     const bodyToValidate = {
-      ...req.body,
-      product: req.body.product?.toString() || req.body.product,
+      ...raw,
+      product: raw.product?.toString() || raw.product,
     };
 
     // Validate request with Zod
@@ -47,17 +65,20 @@ export const createProductVariant = async (req, res) => {
 
     const { product, sku, attributes, price, weight } = parsed.data.body;
 
-    // Verify product exists and belongs to vendor
-    if (req.user?.vendorId) {
-      const productDoc = await Product.findById(product).session(session);
-      if (!productDoc) {
-        await session.abortTransaction();
-        return res.status(404).json({ message: "Product not found" });
-      }
-      if (productDoc.vendor.toString() !== req.user.vendorId) {
-        await session.abortTransaction();
-        return res.status(403).json({ message: "Unauthorized" });
-      }
+    const vendorId = req.user?.vendorId;
+    if (!vendorId) {
+      await session.abortTransaction();
+      return res.status(401).json({ message: "Vendor not authenticated" });
+    }
+
+    const productDoc = await Product.findById(product).session(session);
+    if (!productDoc) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: "Product not found" });
+    }
+    if (productDoc.vendor.toString() !== vendorId) {
+      await session.abortTransaction();
+      return res.status(403).json({ message: "Unauthorized" });
     }
 
     // Calculate discount percent if not provided
@@ -79,7 +100,7 @@ export const createProductVariant = async (req, res) => {
             url: result.secure_url,
             alt: sku,
           };
-        })
+        }),
       );
     }
 
@@ -89,7 +110,9 @@ export const createProductVariant = async (req, res) => {
         {
           product,
           sku,
-          attributes: attributes ? new Map(Object.entries(attributes)) : undefined,
+          attributes: attributes
+            ? new Map(Object.entries(attributes))
+            : undefined,
           price: {
             ...price,
             discountPercent,
@@ -98,7 +121,7 @@ export const createProductVariant = async (req, res) => {
           images,
         },
       ],
-      { session }
+      { session },
     );
 
     // Create inventory entry
@@ -111,17 +134,17 @@ export const createProductVariant = async (req, res) => {
           reserved: 0,
         },
       ],
-      { session }
+      { session },
     );
 
     await session.commitTransaction();
-    
+
     // Publish variant created event
     await publishVariantCreated(variant);
-    
+
     res.status(201).json({
       message: "Variant created successfully",
-      variant,
+      variant: normalizeVariantDoc(variant.toObject()),
     });
   } catch (err) {
     await session.abortTransaction();
@@ -141,10 +164,35 @@ export const createProductVariant = async (req, res) => {
 
 export const updateProductVariant = async (req, res) => {
   try {
+    const rawBody = { ...req.body };
+    if (typeof rawBody.price === "string") {
+      try {
+        rawBody.price = JSON.parse(rawBody.price);
+      } catch {
+        /* keep */
+      }
+    }
+    if (typeof rawBody.weight === "string") {
+      try {
+        rawBody.weight = JSON.parse(rawBody.weight);
+      } catch {
+        /* keep */
+      }
+    }
+    if (typeof rawBody.attributes === "string") {
+      try {
+        rawBody.attributes = JSON.parse(rawBody.attributes);
+      } catch {
+        /* keep */
+      }
+    }
+    if (typeof rawBody.isActive === "string") {
+      rawBody.isActive = rawBody.isActive === "true";
+    }
 
     const parsed = updateVariantZod.safeParse({
       params: req.params,
-      body: req.body,
+      body: rawBody,
     });
     if (!parsed.success) {
       return res.status(400).json({
@@ -155,18 +203,20 @@ export const updateProductVariant = async (req, res) => {
 
     const variantId = parsed.data.params.id;
 
-    // Verify variant belongs to vendor
-    if (req.user?.vendorId) {
-      const variant = await ProductVariant.findById(variantId).populate({
-        path: "product",
-        select: "vendor",
-      });
-      if (!variant) {
-        return res.status(404).json({ message: "Variant not found" });
-      }
-      if (variant.product.vendor.toString() !== req.user.vendorId) {
-        return res.status(403).json({ message: "Unauthorized" });
-      }
+    const vendorId = req.user?.vendorId;
+    if (!vendorId) {
+      return res.status(401).json({ message: "Vendor not authenticated" });
+    }
+
+    const ownVariant = await ProductVariant.findById(variantId).populate({
+      path: "product",
+      select: "vendor",
+    });
+    if (!ownVariant) {
+      return res.status(404).json({ message: "Variant not found" });
+    }
+    if (ownVariant.product.vendor.toString() !== vendorId) {
+      return res.status(403).json({ message: "Unauthorized" });
     }
 
     const updates = { ...parsed.data.body };
@@ -176,7 +226,7 @@ export const updateProductVariant = async (req, res) => {
       const { mrp, sellingPrice } = updates.price;
       if (mrp && sellingPrice) {
         updates.price.discountPercent = Math.round(
-          ((mrp - sellingPrice) / mrp) * 100
+          ((mrp - sellingPrice) / mrp) * 100,
         );
       }
     }
@@ -193,7 +243,7 @@ export const updateProductVariant = async (req, res) => {
             url: result.secure_url,
             alt: variantId,
           };
-        })
+        }),
       );
       updates.images = uploadedImages;
     }
@@ -229,7 +279,7 @@ export const updateProductVariant = async (req, res) => {
 
     res.status(200).json({
       message: "Variant updated successfully",
-      variant,
+      variant: normalizeVariantDoc(variant.toObject()),
     });
   } catch (err) {
     res.status(500).json({
@@ -264,10 +314,10 @@ export const getProductVariant = async (req, res) => {
     }).lean();
 
     res.status(200).json({
-      variant: {
+      variant: normalizeVariantDoc({
         ...variant,
         inventory,
-      },
+      }),
     });
   } catch (err) {
     res.status(500).json({
@@ -301,17 +351,73 @@ export const getProductAllVariant = async (req, res) => {
     }).lean();
 
     const inventoryMap = Object.fromEntries(
-      inventories.map((inv) => [inv.variant.toString(), inv])
+      inventories.map((inv) => [inv.variant.toString(), inv]),
     );
 
-    const result = variants.map((variant) => ({
-      ...variant,
-      inventory: inventoryMap[variant._id.toString()] || null,
-    }));
+    const result = variants.map((variant) =>
+      normalizeVariantDoc({
+        ...variant,
+        inventory: inventoryMap[variant._id.toString()] || null,
+      }),
+    );
 
     res.status(200).json({
       variants: result,
     });
+  } catch (err) {
+    res.status(500).json({
+      message: "Failed to fetch variants",
+      error: err.message,
+    });
+  }
+};
+
+/** Vendor: all variants for a product (including inactive). */
+export const getVendorProductAllVariants = async (req, res) => {
+  try {
+    const vendorId = req.user?.vendorId;
+    if (!vendorId) {
+      return res.status(401).json({ message: "Vendor not authenticated" });
+    }
+
+    const parsed = getVariantsByProductZod.safeParse({ params: req.params });
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: parsed.error.errors,
+      });
+    }
+
+    const productId = parsed.data.params.productId;
+    const product = await Product.findById(productId).select("vendor").lean();
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+    if (product.vendor.toString() !== vendorId) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    const variants = await ProductVariant.find({ product: productId })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    const variantIds = variants.map((v) => v._id);
+    const inventories = await Inventory.find({
+      variant: { $in: variantIds },
+    }).lean();
+
+    const inventoryMap = Object.fromEntries(
+      inventories.map((inv) => [inv.variant.toString(), inv]),
+    );
+
+    const result = variants.map((variant) =>
+      normalizeVariantDoc({
+        ...variant,
+        inventory: inventoryMap[variant._id.toString()] || null,
+      }),
+    );
+
+    res.status(200).json({ variants: result });
   } catch (err) {
     res.status(500).json({
       message: "Failed to fetch variants",
@@ -333,18 +439,20 @@ export const deleteProductVariant = async (req, res) => {
 
     const variantId = parsed.data.params.id;
 
-    // Verify variant belongs to vendor
-    if (req.user?.vendorId) {
-      const variant = await ProductVariant.findById(variantId).populate({
-        path: "product",
-        select: "vendor",
-      });
-      if (!variant) {
-        return res.status(404).json({ message: "Variant not found" });
-      }
-      if (variant.product.vendor.toString() !== req.user.vendorId) {
-        return res.status(403).json({ message: "Unauthorized" });
-      }
+    const vendorId = req.user?.vendorId;
+    if (!vendorId) {
+      return res.status(401).json({ message: "Vendor not authenticated" });
+    }
+
+    const variantOwn = await ProductVariant.findById(variantId).populate({
+      path: "product",
+      select: "vendor",
+    });
+    if (!variantOwn) {
+      return res.status(404).json({ message: "Variant not found" });
+    }
+    if (variantOwn.product.vendor.toString() !== vendorId) {
+      return res.status(403).json({ message: "Unauthorized" });
     }
 
     const session = await mongoose.startSession();
@@ -354,7 +462,7 @@ export const deleteProductVariant = async (req, res) => {
       const variant = await ProductVariant.findByIdAndUpdate(
         variantId,
         { isActive: false },
-        { new: true, session }
+        { new: true, session },
       );
 
       if (!variant) {
@@ -364,8 +472,7 @@ export const deleteProductVariant = async (req, res) => {
 
       // Publish variant deleted event
       await publishVariantDeleted(variantId, variant.product);
-      
-      
+
       // Note: We don't delete inventory, just mark variant as inactive
       await session.commitTransaction();
       res.status(200).json({

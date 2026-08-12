@@ -48,7 +48,7 @@ const ProductListingPage: React.FC = () => {
   const [sortBy, setSortBy] = useState('featured');
   const [filters, setFilters] = useState<FilterState>({
     categories: urlCategory ? [urlCategory] : [],
-    priceRange: [0, 500],
+    priceRange: [0, 100_000],
     minRating: 0,
   });
 
@@ -60,7 +60,8 @@ const ProductListingPage: React.FC = () => {
     }
   }, [urlCategory]);
 
-  const categoryIdForApi = filters.categories[0];
+  const categoryParam =
+    filters.categories.length > 0 ? filters.categories.join(',') : undefined;
 
   const { data: catData = [] } = useCategoriesQuery();
   const categoryOptions: CategoryOption[] = useMemo(
@@ -71,8 +72,9 @@ const ProductListingPage: React.FC = () => {
   const { data, isLoading, isError, refetch, isFetching } = useProductsQuery({
     page,
     limit: 12,
-    category: categoryIdForApi,
+    category: categoryParam,
     search: debouncedSearch || undefined,
+    minRating: filters.minRating > 0 ? filters.minRating : undefined,
   });
 
   const onFilterChange = useCallback((f: FilterState) => {
@@ -82,18 +84,8 @@ const ProductListingPage: React.FC = () => {
 
   const uiProducts = useMemo(() => (data?.data ?? []).map(mapCatalogListItem), [data]);
 
-  const filtered = useMemo(() => {
-    const [minP, maxP] = filters.priceRange;
-    return uiProducts.filter(
-      (p) =>
-        p.price >= minP &&
-        p.price <= maxP &&
-        p.rating >= filters.minRating
-    );
-  }, [uiProducts, filters.priceRange, filters.minRating]);
-
   const sorted = useMemo(() => {
-    return [...filtered].sort((a, b) => {
+    return [...uiProducts].sort((a, b) => {
       switch (sortBy) {
         case 'price-asc':
           return a.price - b.price;
@@ -107,7 +99,7 @@ const ProductListingPage: React.FC = () => {
           return 0;
       }
     });
-  }, [filtered, sortBy]);
+  }, [uiProducts, sortBy]);
 
   const totalPages = data?.pagination?.totalPages ?? 1;
   const total = data?.pagination?.total ?? 0;
@@ -117,7 +109,7 @@ const ProductListingPage: React.FC = () => {
   }, [isError]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
+    <div className="max-w-7xl mx-auto px-4 md:px-6 ">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">All Products</h1>
         {isLoading ? (
@@ -161,7 +153,11 @@ const ProductListingPage: React.FC = () => {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-[300px] glass-strong p-4">
-            <FilterSidebar categoryOptions={categoryOptions} onFilterChange={onFilterChange} />
+            <FilterSidebar
+              filters={filters}
+              categoryOptions={categoryOptions}
+              onFilterChange={onFilterChange}
+            />
           </SheetContent>
         </Sheet>
       </div>
@@ -170,6 +166,7 @@ const ProductListingPage: React.FC = () => {
         <div className="hidden lg:block w-[260px] shrink-0">
           <FilterSidebar
             className="sticky top-24"
+            filters={filters}
             categoryOptions={categoryOptions}
             onFilterChange={onFilterChange}
           />
@@ -214,6 +211,7 @@ const ProductListingPage: React.FC = () => {
                     reviewCount={product.reviewCount}
                     category={product.category}
                     vendorName={product.vendorName}
+                    vendorLogo={product.vendorLogo}
                   />
                 ))}
               </div>
