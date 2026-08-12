@@ -47,7 +47,7 @@ const OrderHistoryPage: React.FC = () => {
   }, [rows, debounced]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
+    <div className="max-w-7xl mx-auto px-4 md:px-6 ">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold">Order History</h1>

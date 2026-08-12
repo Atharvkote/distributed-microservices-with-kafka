@@ -10,6 +10,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { HiShoppingCart } from "react-icons/hi2";
 import CategoryGrid from '@/components/common/CategoryCards';
 import { IoIosCart, IoIosHome } from "react-icons/io";
+import { buildCategoryTree, formatForBento } from '@/components/utils/category-tree';
+import { vendorPaths } from '@/lib/vendor-paths';
 
 const iconFor = (name: string) => {
   const n = name.toLowerCase();
@@ -24,6 +26,10 @@ const LandingPage: React.FC = () => {
   const { data: categories = [], isLoading: catLoading } = useCategoriesQuery();
 
   const featured = (productsData?.data ?? []).slice(0, 4).map(mapCatalogListItem);
+ 
+
+const tree = buildCategoryTree(categories as any[]);
+const formattedCategories = formatForBento(tree);
 
   return (
     <div className="relative top-0 min-h-screen overflow-hidden">
@@ -75,7 +81,7 @@ const LandingPage: React.FC = () => {
                 Browse Products
               </Button>
             </Link>
-            <Link to="/vendor/dashboard">
+            <Link to={vendorPaths.home}>
               <Button size="lg" className="border-2 cursor-pointer bg-transparent text-amber-200 border-amber-400 hover:bg-amber-300 hover:text-black h-12 px-8 text-base">
                 Become a Vendor
               </Button>
@@ -84,7 +90,7 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      <CategoryGrid categories={categories} catLoading={catLoading} iconFor={iconFor} />
+      <CategoryGrid categories={formattedCategories} catLoading={catLoading} iconFor={iconFor} />
 
       <section className="py-16 md:py-20">
         <div className="max-w-7xl mx-auto px-4 md:px-6">

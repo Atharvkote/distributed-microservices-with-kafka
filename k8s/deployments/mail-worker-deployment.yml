@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mail-worker
+  labels:
+    app: mail-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mail-worker
+  template:
+    metadata:
+      labels:
+        app: mail-worker
+    spec:
+      containers:
+      - name: mail-worker
+        image: atharvakote/mail-worker:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: SMTP_HOST
+          value: "smtp.gmail.com"
+        - name: SMTP_PORT
+          value: "587"
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: REDIS_URL
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: REDIS_PORT
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: REDIS_HOST
+        - name: SMTP_USER
+          valueFrom:
+            secretKeyRef:
+              name: app-secret
+              key: SMTP_USER
+        - name: SMTP_PASS
+          valueFrom:
+            secretKeyRef:
+              name: app-secret
+              key: SMTP_PASS
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"

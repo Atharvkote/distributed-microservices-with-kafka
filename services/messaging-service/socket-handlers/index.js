@@ -14,6 +14,12 @@ export const initSocketIO = (io) => {
       socketioLogger.info(`User ${userId} joined room user:${userId}`);
     });
 
+    socket.on("register-vendor", (vendorId) => {
+      if (!vendorId) return;
+      socket.join(`vendor:${vendorId}`);
+      socketioLogger.info(`Vendor ${vendorId} joined room vendor:${vendorId}`);
+    });
+
     socket.on("disconnect", (reason) => {
       socketioLogger.info(`Socket disconnected: ${socket.id} | ${reason}`);
     });

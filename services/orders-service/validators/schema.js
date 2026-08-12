@@ -10,9 +10,8 @@ export const objectIdSchema = z
 // Order Item Schema
 const orderItemSchema = z.object({
   productId: objectIdSchema,
-  variantId: objectIdSchema.optional(),
+  variantId: objectIdSchema,
   quantity: z.number().min(1).max(1000),
-  price: z.number().positive().optional(),
 });
 
 // Shipping Address Schema
@@ -27,7 +26,7 @@ const shippingAddressSchema = z.object({
 // Create Order Validation
 export const createOrderZod = z.object({
   body: z.object({
-    customerId: objectIdSchema,
+    customerId: objectIdSchema.optional(),
     customerName: z.string().min(1).max(100),
     customerEmail: z.string().email().optional(),
     customerPhone: z.string().optional(),

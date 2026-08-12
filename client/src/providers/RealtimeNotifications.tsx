@@ -14,6 +14,7 @@ import { queryKeys } from '@/hooks/queryKeys';
  */
 export function RealtimeNotifications() {
   const user = useAuthStore((s) => s.user);
+  const vendorId = useAuthStore((s) => s.vendorId);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const authReady = useAuthStore((s) => s.authReady);
   const queryClient = useQueryClient();
@@ -24,7 +25,7 @@ export function RealtimeNotifications() {
       return;
     }
 
-    const s = connectNotificationsSocket(user.id);
+    const s = connectNotificationsSocket(user.id, vendorId);
 
     const onUser = (payload: { title?: string; message?: string }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications(user.id) });
@@ -40,16 +41,27 @@ export function RealtimeNotifications() {
       });
     };
 
+    const onOrderSocket = (payload: { orderId?: string; type?: string }) => {
+      void queryClient.invalidateQueries({ queryKey: ['orders'] });
+      if (payload.orderId) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.order(payload.orderId) });
+      }
+    };
+
     s.on('notification:user', onUser);
     s.on('notification:global', onGlobal);
+    s.on('order:new', onOrderSocket);
+    s.on('order:update', onOrderSocket);
 
     return () => {
       const sock = getNotificationsSocket();
       sock?.off('notification:user', onUser);
       sock?.off('notification:global', onGlobal);
+      sock?.off('order:new', onOrderSocket);
+      sock?.off('order:update', onOrderSocket);
       disconnectNotificationsSocket();
     };
-  }, [authReady, isAuthenticated, queryClient, user?.id]);
+  }, [authReady, isAuthenticated, queryClient, user?.id, vendorId]);
 
   return null;
 }

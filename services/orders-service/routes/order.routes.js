@@ -3,6 +3,7 @@ import {
   createOrder,
   getOrderById,
   listOrders,
+  listOrdersForVendor,
   updateOrderStatus,
   updatePaymentStatus,
   generatePaymentIntent,
@@ -10,6 +11,7 @@ import {
   getVariantDetails,
   searchProducts,
 } from "../controllers/order.controller.js";
+import { authMiddleware } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
@@ -21,13 +23,13 @@ router.get("/products/:productId", getProductDetails);
 router.get("/variants/:variantId", getVariantDetails);
 
 // Order endpoints
-router.post("/", createOrder);
-router.get("/", listOrders);
-router.get("/:id", getOrderById);
-router.patch("/:id/status", updateOrderStatus);
+router.post("/", authMiddleware, createOrder);
+router.get("/", authMiddleware, listOrders);
+router.get("/vendor/me", authMiddleware, listOrdersForVendor);
+router.get("/:id", authMiddleware, getOrderById);
+router.patch("/:id/status", authMiddleware, updateOrderStatus);
 
 // Payment endpoints
-router.post("/:id/payment-intent", generatePaymentIntent);
-router.patch("/:id/payment", updatePaymentStatus);
+router.post("/:id/payment-intent", authMiddleware, generatePaymentIntent);
 
 export default router;

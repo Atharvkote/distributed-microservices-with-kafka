@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Package, ShoppingCart, BarChart3, Users, Settings,
   Store, ClipboardList, Warehouse, DollarSign, Shield, Eye, TrendingUp,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, ShoppingBag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/store/uiStore';
@@ -11,6 +11,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { RoleSwitcher } from '../auth/RoleSwitcher';
+import { vendorPaths, VENDOR_BASE } from '@/lib/vendor-paths';
 
 interface NavItem {
   label: string;
@@ -19,11 +21,12 @@ interface NavItem {
 }
 
 const vendorNav: NavItem[] = [
-  { label: 'Dashboard', href: '/vendor/dashboard', icon: LayoutDashboard },
-  { label: 'Products', href: '/vendor/products', icon: Package },
-  { label: 'Orders', href: '/vendor/orders', icon: ShoppingCart },
-  { label: 'Inventory', href: '/vendor/inventory', icon: Warehouse },
-  { label: 'Earnings', href: '/vendor/earnings', icon: DollarSign },
+  { label: 'Shopping', href: '/dashboard', icon: ShoppingBag },
+  { label: 'Dashboard', href: vendorPaths.home, icon: LayoutDashboard },
+  { label: 'Products', href: vendorPaths.products, icon: Package },
+  { label: 'Orders', href: vendorPaths.orders, icon: ShoppingCart },
+  { label: 'Inventory', href: vendorPaths.inventory, icon: Warehouse },
+  { label: 'Earnings', href: vendorPaths.earnings, icon: DollarSign },
 ];
 
 const adminNav: NavItem[] = [
@@ -55,22 +58,30 @@ const Sidebar: React.FC<SidebarProps> = ({ variant }) => {
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 h-16 border-b border-border/50">
           <div className="h-8 w-8 rounded-lg gradient-primary flex items-center justify-center shrink-0">
-            {variant === 'vendor' ? (
-              <Store className="h-4 w-4 text-white" />
-            ) : (
-              <Shield className="h-4 w-4 text-white" />
-            )}
+            <img src="/Logo.png" alt="VenDeX Logo" className=''/>
           </div>
           {!sidebarCollapsed && (
-            <span className="font-semibold text-sm neon-text truncate">{title}</span>
+            <span className="font-semibold text-md neon-text ">VenDeX <span className="text-primary carattere-regular text-2xl">Portal</span></span>
           )}
+        </div>
+
+        <div>
+          {variant === 'vendor' && (
+                    <div className="flex justify-end px-4 md:px-6 pt-3 ">
+                      <RoleSwitcher />
+                    </div>
+                  )}
         </div>
 
         {/* Navigation */}
         <ScrollArea className="flex-1 py-4">
           <nav className="flex flex-col gap-1 px-2">
             {navItems.map((item) => {
-              const isActive = location.pathname === item.href;
+              const isActive =
+                item.href === vendorPaths.home
+                  ? location.pathname === vendorPaths.home
+                  : location.pathname === item.href ||
+                    location.pathname.startsWith(`${item.href}/`);
               const Icon = item.icon;
 
               const linkContent = (
@@ -108,7 +119,7 @@ const Sidebar: React.FC<SidebarProps> = ({ variant }) => {
         <Separator className="opacity-30" />
 
         {/* Collapse toggle */}
-        <div className="p-2">
+        {/* <div className="p-2">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -125,14 +136,14 @@ const Sidebar: React.FC<SidebarProps> = ({ variant }) => {
               <TooltipContent side="right">Expand sidebar</TooltipContent>
             )}
           </Tooltip>
-        </div>
+        </div> */}
 
         {/* Settings */}
         <div className="p-2 border-t border-border/50">
           <Tooltip>
             <TooltipTrigger asChild>
               <Link
-                to={`/${variant}/settings`}
+                to={variant === 'vendor' ? `${VENDOR_BASE}/settings` : `/${variant}/settings`}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-all"
               >
                 <Settings className="h-5 w-5 shrink-0" />

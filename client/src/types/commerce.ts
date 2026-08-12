@@ -51,6 +51,8 @@ export interface UiProduct {
   reviewCount: number;
   vendorId: string;
   vendorName: string;
+  vendorLogo?: string;
+  vendorRating?: number;
   stock: number;
   tags: string[];
   status: 'active' | 'pending' | 'rejected';

@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCartStore } from '@/store/cartStore';
 import { useAuthStore } from '@/store/authStore';
+import { vendorPaths } from '@/lib/vendor-paths';
+import { RoleSwitcher } from '@/components/auth/RoleSwitcher';
 import { useUIStore } from '@/store/uiStore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -19,6 +21,7 @@ import { IoIosCart, IoIosHome, IoMdSearch } from "react-icons/io";
 import { MdHome } from "react-icons/md";
 import { AiFillProduct } from "react-icons/ai";
 import {useLocation} from "react-router-dom"
+import { RiMenuFold4Fill } from "react-icons/ri";
 
 const MainLayout: React.FC = () => {
   const cartCount = useCartStore((s) => s.totalItems());
@@ -33,28 +36,35 @@ const MainLayout: React.FC = () => {
         <div className="max-w-7xl mx-auto flex items-center justify-between h-full px-4 md:px-6">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-1 group">
-            <img src="/Logo.png" alt="NexaMarket" height={45} width={45} className=" rounded-lg" />
+            <img src="/Logo.png" alt="VenDeX" height={45} width={45} className=" rounded-lg" />
             <span className="font-bold text-2xl tracking-wider neon-text">VenDe<span className="text-3xl">X </span></span>
           </Link>
 
           {/* Navigation */}
           <nav className="hidden md:flex items-center gap-6">
-            <Link to="/" className="text-sm font-medium text-white cursor-pointer hover:text-primary transition-colors flex items-center gap-2">
+            <Link to="/" className="text-xs font-medium text-white cursor-pointer hover:text-primary transition-colors flex items-center gap-2">
               <MdHome className="h-5 w-5" />
               Home
             </Link>
-            <Link to="/products" className="text-sm font-medium text-white cursor-pointer hover:text-primary transition-colors flex items-center gap-2">
+            <Link to="/products" className="text-xs font-medium text-white cursor-pointer hover:text-primary transition-colors flex items-center gap-2">
               <AiFillProduct className="h-5 w-5" />
               Products
             </Link>
-            <Link to="/orders" className="text-sm font-medium text-white cursor-pointer hover:text-primary transition-colors flex items-center gap-2">
+            <Link to="/orders" className="text-xs font-medium text-white cursor-pointer hover:text-primary transition-colors flex items-center gap-2">
               <IoIosCart className="h-5 w-5" />
               My Orders
             </Link>
+            {isAuthenticated && (
+              <Link to="/dashboard" className="text-xs font-medium text-white cursor-pointer hover:text-primary transition-colors flex items-center gap-2">
+                <RiMenuFold4Fill  className="h-5 w-5" />
+                Dashboard
+              </Link>
+            )}
           </nav>
 
           {/* Actions */}
           <div className="flex items-center gap-2">
+            
             <Button variant="ghost" size="icon" className="text-white cursor-pointer hover:text-foreground">
               <IoMdSearch className="h-7 w-7" />
             </Button>
@@ -93,11 +103,18 @@ const MainLayout: React.FC = () => {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {user.role === 'vendor' && (
-                    <DropdownMenuItem asChild>
-                      <Link to="/vendor/dashboard" className="cursor-pointer">
-                        <LayoutDashboard className="h-4 w-4 mr-2" /> Vendor Dashboard
-                      </Link>
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link to="/dashboard" className="cursor-pointer">
+                          <LayoutDashboard className="h-4 w-4 mr-2" /> Shopping dashboard
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to={vendorPaths.home} className="cursor-pointer">
+                          <LayoutDashboard className="h-4 w-4 mr-2" /> Vendor dashboard
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
                   )}
                   {user.role === 'admin' && (
                     <DropdownMenuItem asChild>

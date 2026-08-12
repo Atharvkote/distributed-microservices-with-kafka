@@ -7,15 +7,33 @@ export function useProductsQuery(opts: {
   limit?: number;
   category?: string;
   search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  minRating?: number;
+  vendor?: string;
 }) {
+  const { page, limit, category, search, minPrice, maxPrice, minRating, vendor } = opts;
   return useQuery({
-    queryKey: queryKeys.products(opts.page, opts.category, opts.search),
+    queryKey: queryKeys.products({
+      page,
+      limit,
+      category,
+      search,
+      minPrice,
+      maxPrice,
+      minRating,
+      vendor,
+    }),
     queryFn: async () => {
       const { data } = await catalogApi.listProducts({
-        page: opts.page,
-        limit: opts.limit ?? 12,
-        category: opts.category,
-        search: opts.search,
+        page,
+        limit: limit ?? 12,
+        category,
+        search,
+        minPrice,
+        maxPrice,
+        minRating,
+        vendor,
       });
       return data;
     },

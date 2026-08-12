@@ -8,7 +8,34 @@ import {
   updateOrderStatusZod,
   updatePaymentStatusZod,
 } from "../validators/schema.js";
-import logger  from "../utils/logger.js";
+import logger from "../utils/logger.js";
+import { publishOrderEvent } from "../kafka/order-lifecycle.producer.js";
+
+/** Strict fulfillment transitions for PATCH /status */
+const ALLOWED_STATUS_TRANSITIONS = {
+  PENDING: ["CONFIRMED", "CANCELLED"],
+  CONFIRMED: ["PROCESSING", "CANCELLED"],
+  PROCESSING: ["SHIPPED", "CANCELLED"],
+  SHIPPED: ["DELIVERED"],
+  DELIVERED: [],
+  CANCELLED: [],
+  REFUNDED: [],
+};
+
+function uniqueVendorIdsFromOrder(order) {
+  const ids = new Set();
+  for (const it of order.items || []) {
+    if (it.vendorId) ids.add(it.vendorId.toString());
+  }
+  return [...ids];
+}
+
+function orderTouchesVendor(order, vendorIdStr) {
+  if (!vendorIdStr) return false;
+  return (order.items || []).some(
+    (it) => it.vendorId && it.vendorId.toString() === vendorIdStr
+  );
+}
 
 export const getProductFromReadModel = async (productId) => {
   try {
@@ -54,6 +81,9 @@ export const getProductVariantsFromReadModel = async (productId) => {
  * Create order with validation against read model
  */
 export const createOrder = async (req, res) => {
+  const reservationItems = [];
+  const CATALOG_SERVICE_URL = process.env.CATALOG_SERVICE_URL || "http://localhost:3003";
+
   try {
     const parsed = createOrderZod.safeParse({ body: req.body });
     if (!parsed.success) {
@@ -63,33 +93,26 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    const { customerId, customerName, customerEmail, customerPhone, shippingAddress, items, notes } =
+    const { customerName, customerEmail, customerPhone, shippingAddress, items, notes } =
       parsed.data.body;
+
+    const customerId = req.user.id;
 
     // Validate all items against read model (CQRS: Query from read model)
     const validatedItems = [];
 
     for (const item of items) {
-      let product = null;
-      let variant = null;
-
-      // If variantId is provided, fetch variant and its product
-      if (item.variantId) {
-        variant = await getVariantFromReadModel(item.variantId);
-        if (!variant) {
-          return res.status(404).json({
-            message: `Variant not found: ${item.variantId}`,
-          });
-        }
-        product = await getProductFromReadModel(variant.productId);
-      } else if (item.productId) {
-        // If only productId is provided, fetch product
-        product = await getProductFromReadModel(item.productId);
+      const variant = await getVariantFromReadModel(item.variantId);
+      if (!variant) {
+        return res.status(404).json({
+          message: `Variant not found: ${item.variantId}`,
+        });
       }
 
+      const product = await getProductFromReadModel(variant.productId);
       if (!product) {
         return res.status(404).json({
-          message: `Product not found: ${item.productId || item.variantId}`,
+          message: `Product not found for variant: ${item.variantId}`,
         });
       }
 
@@ -99,20 +122,19 @@ export const createOrder = async (req, res) => {
         productTitle: product.title,
         productBrand: product.brand,
         productCategory: product.category,
+        vendorId: product.vendor,
         quantity: item.quantity,
+        variantId: variant.variantId,
+        variantSku: variant.sku,
+        price: variant.price.sellingPrice,
+        priceDetails: variant.price,
       };
 
-      if (variant) {
-        enrichedItem.variantId = variant.variantId;
-        enrichedItem.variantSku = variant.sku;
-        enrichedItem.price = variant.price.sellingPrice;
-        enrichedItem.priceDetails = variant.price;
-      } else {
-        // Use product level pricing if no variant
-        enrichedItem.price = item.price || 0;
-      }
-
       validatedItems.push(enrichedItem);
+      reservationItems.push({
+        variantId: variant.variantId.toString(),
+        quantity: item.quantity
+      });
     }
 
     const total = validatedItems.reduce(
@@ -120,30 +142,80 @@ export const createOrder = async (req, res) => {
       0
     );
 
-    const order = await Order.create({
-      customerId,
-      customerName,
-      customerEmail: customerEmail || "",
-      customerPhone: customerPhone || "",
-      shippingAddress,
-      items: validatedItems,
-      total,
-      status: "PENDING",
-      notes: notes || "",
-      syncedFromReadModel: true,
-      lastSyncedAt: new Date(),
-    });
+    // Call inventory reserve endpoint in catalog-service
+    try {
+      const reserveResponse = await fetch(`${CATALOG_SERVICE_URL}/inventory/reserve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: reservationItems })
+      });
+
+      if (!reserveResponse.ok) {
+        const errData = await reserveResponse.json().catch(() => ({}));
+        return res.status(reserveResponse.status).json({
+          message: errData.message || "Failed to reserve inventory"
+        });
+      }
+    } catch (fetchErr) {
+      logger.error("Failed to connect to catalog service for inventory reservation:", fetchErr);
+      return res.status(503).json({
+        message: "Catalog service is currently unavailable. Please try again later."
+      });
+    }
+
+    let order;
+    try {
+      order = await Order.create({
+        customerId,
+        customerName,
+        customerEmail: customerEmail || "",
+        customerPhone: customerPhone || "",
+        shippingAddress,
+        items: validatedItems,
+        total,
+        status: "PENDING",
+        notes: notes || "",
+        syncedFromReadModel: true,
+        lastSyncedAt: new Date(),
+      });
+    } catch (createErr) {
+      // Rollback reservation since order insertion failed
+      logger.error("Order creation in DB failed, rolling back inventory reservation:", createErr);
+      await fetch(`${CATALOG_SERVICE_URL}/inventory/release`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: reservationItems })
+      }).catch(releaseErr => {
+        logger.error("Failed to release inventory during rollback:", releaseErr);
+      });
+      throw createErr;
+    }
 
     logger.info(
       `Order created: ${order._id} for customer ${customerId} with total ${total}`
     );
+
+    const vendorIds = uniqueVendorIdsFromOrder(order);
+    try {
+      await publishOrderEvent("ORDER_CREATED", {
+        orderId: order._id.toString(),
+        customerId: customerId.toString(),
+        customerEmail: order.customerEmail,
+        status: order.status,
+        total: order.total,
+        vendorIds,
+      });
+    } catch (eventErr) {
+      logger.error("Failed to publish ORDER_CREATED event:", eventErr);
+      // Even if event publishing fails, the order has been created.
+    }
 
     return res.status(201).json({
       message: "Order created successfully",
       order,
     });
   } catch (err) {
-    logger.error("Failed to create order", err);
+    logger.error("Failed to create order:", err);
     return res.status(500).json({
       message: "Failed to create order",
       error: err.message,
@@ -165,6 +237,20 @@ export const getOrderById = async (req, res) => {
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
+    }
+
+    // Access control check to prevent IDOR
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+    const vendorId = req.user?.vendorId;
+    const isVendor = req.user?.isVendor;
+
+    const isAdmin = userRole === "ADMIN";
+    const isOwner = order.customerId && order.customerId.toString() === userId;
+    const isAssociatedVendor = isVendor && vendorId && orderTouchesVendor(order, vendorId.toString());
+
+    if (!isAdmin && !isOwner && !isAssociatedVendor) {
+      return res.status(403).json({ message: "Access denied to this order" });
     }
 
     // Enrich order with additional product details from read model
@@ -192,6 +278,55 @@ export const getOrderById = async (req, res) => {
   }
 };
 
+export const listOrdersForVendor = async (req, res) => {
+  try {
+    const vendorId = req.user?.vendorId;
+    if (!req.user?.isVendor || !vendorId) {
+      return res.status(403).json({ message: "Vendor access required" });
+    }
+
+    const parsed = listOrdersZod.safeParse({ query: req.query });
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: parsed.error.errors,
+      });
+    }
+
+    const { status } = parsed.data.query;
+    let { page = 1, limit = 20 } = parsed.data.query;
+
+    page = Math.max(Number(page) || 1, 1);
+    limit = Math.min(Math.max(Number(limit) || 20, 1), 100);
+
+    const filter = { "items.vendorId": vendorId };
+    if (status) filter.status = status;
+
+    const skip = (page - 1) * limit;
+
+    const [orders, total] = await Promise.all([
+      Order.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Order.countDocuments(filter),
+    ]);
+
+    return res.status(200).json({
+      orders,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page * limit < total,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({
+      message: "Failed to list vendor orders",
+      error: err.message,
+    });
+  }
+};
+
 export const listOrders = async (req, res) => {
   try {
     const parsed = listOrdersZod.safeParse({ query: req.query });
@@ -209,7 +344,11 @@ export const listOrders = async (req, res) => {
     limit = Math.min(Math.max(Number(limit) || 20, 1), 100);
 
     const filter = {};
-    if (customerId) filter.customerId = customerId;
+    if (req.user?.role === "ADMIN") {
+      if (customerId) filter.customerId = customerId;
+    } else {
+      filter.customerId = req.user?.id;
+    }
     if (status) filter.status = status;
 
     const skip = (page - 1) * limit;
@@ -262,8 +401,36 @@ export const updateOrderStatus = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
+    const vendorId = req.user?.vendorId;
+    if (!req.user?.isVendor || !vendorId) {
+      return res.status(403).json({ message: "Vendor access required" });
+    }
+    if (!orderTouchesVendor(order, vendorId.toString())) {
+      return res.status(403).json({ message: "Not part of this order" });
+    }
+
+    const prev = order.status;
+    const allowed = ALLOWED_STATUS_TRANSITIONS[prev] || [];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({
+        message: "Invalid status transition",
+        from: prev,
+        to: status,
+        allowed,
+      });
+    }
+
     order.status = status;
     await order.save();
+
+    const vendorIds = uniqueVendorIdsFromOrder(order);
+    await publishOrderEvent("ORDER_STATUS_UPDATED", {
+      orderId: order._id.toString(),
+      customerId: order.customerId.toString(),
+      fromStatus: prev,
+      status,
+      vendorIds,
+    });
 
     return res.status(200).json({
       message: "Order status updated successfully",

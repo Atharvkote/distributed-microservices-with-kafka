@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  NODE_ENV: "production"
+  JWT_SECRET: "MdxEXliscgjelV9"
+  JWT_EXPIRATION: "7d"
+  SALT_ROUNDS: "10"
+  REDIS_URL: "redis://redis:6379"
+  REDIS_PORT: "6379"
+  REDIS_HOST: "redis"
+  KAFKA_BROKERS: "kafka-service:9092"
+  CLOUNDINARY_CLOUD_NAME: "dgz7hqbl9"
+  CLOUNDINARY_API_KEY: "987989448915425"
+  CLOUNDINARY_API_SECRET: "iEqFzgrK1f5LP39oCwsd3xsIgUU"
+  CATALOG_SERVICE_URL: "http://catalog-service:3003"

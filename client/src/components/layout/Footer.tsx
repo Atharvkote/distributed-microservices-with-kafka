@@ -14,7 +14,7 @@ const Footer: React.FC = () => {
               <div className="h-8 w-8 rounded-lg gradient-primary flex items-center justify-center">
                 <Package className="h-4 w-4 text-white" />
               </div>
-              <span className="font-bold text-lg neon-text">NexaMarket</span>
+              <span className="font-bold text-lg neon-text">VenDeX</span>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
               The premier multi-vendor marketplace for premium products and trusted sellers.
@@ -59,7 +59,7 @@ const Footer: React.FC = () => {
 
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-xs text-muted-foreground">
-            © 2026 NexaMarket. All rights reserved.
+            © 2026 VenDeX. All rights reserved.
           </p>
           <div className="flex items-center gap-4">
             <a href="#" className="text-muted-foreground hover:text-primary transition-colors">

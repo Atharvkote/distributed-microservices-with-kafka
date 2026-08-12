@@ -10,7 +10,14 @@ import { useAuthStore } from '@/store/authStore';
 const UnauthorizedSync: React.FC = () => {
   useEffect(() => {
     const on401 = () => {
-      useAuthStore.setState({ token: null, user: null, isAuthenticated: false });
+      useAuthStore.setState({
+        token: null,
+        user: null,
+        isAuthenticated: false,
+        isVendor: false,
+        vendorId: null,
+        profileCompleted: false,
+      });
     };
     window.addEventListener('vendex:unauthorized', on401);
     return () => window.removeEventListener('vendex:unauthorized', on401);

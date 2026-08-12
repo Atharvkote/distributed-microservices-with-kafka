@@ -2,11 +2,12 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Package, ShoppingCart, Warehouse, DollarSign,
-  Store, ClipboardList, Eye, TrendingUp, Shield, X, Home
+  Store, ClipboardList, Eye, TrendingUp, Shield, X, Home, ShoppingBag,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useUIStore } from '@/store/uiStore';
 import { cn } from '@/lib/utils';
+import { vendorPaths } from '@/lib/vendor-paths';
 
 interface NavItem {
   label: string;
@@ -15,11 +16,12 @@ interface NavItem {
 }
 
 const vendorNav: NavItem[] = [
-  { label: 'Dashboard', href: '/vendor/dashboard', icon: LayoutDashboard },
-  { label: 'Products', href: '/vendor/products', icon: Package },
-  { label: 'Orders', href: '/vendor/orders', icon: ShoppingCart },
-  { label: 'Inventory', href: '/vendor/inventory', icon: Warehouse },
-  { label: 'Earnings', href: '/vendor/earnings', icon: DollarSign },
+  { label: 'Shopping', href: '/dashboard', icon: ShoppingBag },
+  { label: 'Vendor home', href: vendorPaths.home, icon: LayoutDashboard },
+  { label: 'Products', href: vendorPaths.products, icon: Package },
+  { label: 'Orders', href: vendorPaths.orders, icon: ShoppingCart },
+  { label: 'Inventory', href: vendorPaths.inventory, icon: Warehouse },
+  { label: 'Earnings', href: vendorPaths.earnings, icon: DollarSign },
 ];
 
 const adminNav: NavItem[] = [
@@ -32,6 +34,7 @@ const adminNav: NavItem[] = [
 
 const customerNav: NavItem[] = [
   { label: 'Home', href: '/', icon: Home },
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Products', href: '/products', icon: Package },
   { label: 'Cart', href: '/cart', icon: ShoppingCart },
   { label: 'Orders', href: '/orders', icon: ClipboardList },
@@ -46,7 +49,7 @@ const MobileMenu: React.FC<MobileMenuProps> = ({ variant = 'customer' }) => {
   const { mobileMenuOpen, setMobileMenuOpen } = useUIStore();
 
   const navItems = variant === 'vendor' ? vendorNav : variant === 'admin' ? adminNav : customerNav;
-  const title = variant === 'vendor' ? 'Vendor Portal' : variant === 'admin' ? 'Admin Panel' : 'NexaMarket';
+  const title = variant === 'vendor' ? 'Vendor Portal' : variant === 'admin' ? 'Admin Panel' : 'VenDeX';
   const TitleIcon = variant === 'vendor' ? Store : variant === 'admin' ? Shield : Package;
 
   return (
@@ -61,7 +64,10 @@ const MobileMenu: React.FC<MobileMenuProps> = ({ variant = 'customer' }) => {
 
         <nav className="flex flex-col gap-1 p-3 mt-2">
           {navItems.map((item) => {
-            const isActive = location.pathname === item.href;
+            const isActive =
+              item.href === vendorPaths.home
+                ? location.pathname === vendorPaths.home
+                : location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
 
             return (

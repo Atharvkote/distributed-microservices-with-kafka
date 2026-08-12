@@ -4,7 +4,7 @@ import { getAccessToken } from '@/lib/access-token';
 
 let socket: Socket | null = null;
 
-export function connectNotificationsSocket(userId: string) {
+export function connectNotificationsSocket(userId: string, vendorId?: string | null) {
   disconnectNotificationsSocket();
   const url = messagingSocketUrl();
   socket = io(url, {
@@ -13,6 +13,7 @@ export function connectNotificationsSocket(userId: string) {
   });
   socket.on('connect', () => {
     socket?.emit('register-user', userId);
+    if (vendorId) socket?.emit('register-vendor', vendorId);
   });
   return socket;
 }

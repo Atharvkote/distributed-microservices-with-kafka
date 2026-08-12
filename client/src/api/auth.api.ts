@@ -1,7 +1,7 @@
 import { apiClient } from '@/lib/api-client';
 import { GATEWAY } from '@/lib/gateway-paths';
 
-const base = `${GATEWAY.auth}/api/auth`;
+const base = `${GATEWAY.auth}/user`;
 
 export interface LoginBody {
   email: string;

@@ -71,6 +71,10 @@ const orderSchema = new mongoose.Schema(
           sellingPrice: Number,
           discountPercent: { type: Number, default: 0 },
         },
+        vendorId: {
+          type: mongoose.Schema.Types.ObjectId,
+          index: true,
+        },
       },
     ],
 
@@ -128,6 +132,7 @@ orderSchema.index({ customerId: 1, createdAt: -1 });
 orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ "payment.status": 1 });
 orderSchema.index({ createdAt: -1 });
+orderSchema.index({ "items.vendorId": 1, createdAt: -1 });
 
 // Virtual for order number based on ID
 orderSchema.virtual("orderNumber").get(function () {

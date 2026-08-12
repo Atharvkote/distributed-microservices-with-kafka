@@ -54,6 +54,10 @@ export const updateProfile = async (req, res) => {
 
 export const completeProfile = async (req, res) => {
   try {
+    if (req.params.id !== req.user.id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
     const userId = req.user.id;
     const data = validate(completeProfileSchema, req.body);
 
@@ -66,9 +70,13 @@ export const completeProfile = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    const token = await user.generateToken();
+
     res.json({
       message: "Profile completed successfully",
       user,
+      token,
+      accessToken: token,
     });
   } catch (err) {
     res.status(400).json({ message: err.message });

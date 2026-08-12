@@ -6,6 +6,10 @@ import {
   handleVariantUpdated,
   handleVariantDeleted,
 } from "./handlers/order.handler.js";
+import {
+  handlePaymentSuccess,
+  handlePaymentFailed,
+} from "./handlers/payment.handler.js";
 
 export const eventRegistry = {
   "catalog": {
@@ -18,5 +22,9 @@ export const eventRegistry = {
     VARIANT_CREATED: handleVariantCreated,
     VARIANT_UPDATED: handleVariantUpdated,
     VARIANT_DELETED: handleVariantDeleted,
+  },
+  "payment": {
+    PAYMENT_SUCCESS: handlePaymentSuccess,
+    PAYMENT_FAILED: handlePaymentFailed,
   },
 };

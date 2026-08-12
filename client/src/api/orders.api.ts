@@ -43,6 +43,7 @@ export interface OrderRecord {
     variantSku?: string;
     quantity: number;
     price: number;
+    vendorId?: string;
   }>;
   total: number;
   status: string;
@@ -59,6 +60,8 @@ export interface OrderRecord {
 
 export interface ListOrdersParams {
   customerId?: string;
+  /** When set, calls GET .../vendor/me (vendor-scoped orders). */
+  vendorScope?: 'me';
   status?: string;
   page?: number;
   limit?: number;
@@ -85,8 +88,13 @@ export const ordersApi = {
   create: (body: CreateOrderBody) =>
     apiClient.post<{ message: string; order: OrderRecord }>(`${base}/`, body),
 
-  list: (params?: ListOrdersParams) =>
-    apiClient.get<ListOrdersResponse>(`${base}/`, { params }),
+  list: (params?: ListOrdersParams) => {
+    if (params?.vendorScope === 'me') {
+      const { vendorScope: _, ...rest } = params;
+      return apiClient.get<ListOrdersResponse>(`${base}/vendor/me`, { params: rest });
+    }
+    return apiClient.get<ListOrdersResponse>(`${base}/`, { params });
+  },
 
   getById: (id: string) => apiClient.get<{ order: OrderRecord }>(`${base}/${id}`),
 

@@ -15,6 +15,8 @@ services:
       - "3004:3004"
     env_file:
       - ../services/orders-service/.env
+    environment:
+      - CATALOG_SERVICE_URL=http://catalog-service:3003
     networks:
       - vendex-infra
 

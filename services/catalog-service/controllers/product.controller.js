@@ -3,6 +3,8 @@ import slugify from "slugify";
 import { Product } from "../models/product.model.js";
 import { ProductVariant } from "../models/variant.model.js";
 import { Category } from "../models/category.model.js";
+import { Inventory } from "../models/inventory.model.js";
+import { VendorProfile } from "../models/vendor-profile.model.js";
 import {
   createProductZod,
   updateProductZod,
@@ -14,10 +16,105 @@ import {
   publishProductUpdated,
   publishProductDeleted,
 } from "../kafka/kafka.producer.js";
+import { normalizeVariantDoc } from "../lib/variant-json.js";
+
+const VENDOR_POPULATE_SELECT = "store_name store_logo ratings";
+
+function parseCategoryFilter(raw) {
+  if (raw == null || raw === "") return null;
+  const ids = String(raw)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (ids.length === 0) return null;
+  if (ids.length === 1) return ids[0];
+  return { $in: ids };
+}
+
+function parseNum(q, key) {
+  if (q[key] == null || q[key] === "") return null;
+  const n = Number(q[key]);
+  return Number.isFinite(n) ? n : null;
+}
+
+function parseObjectId(raw) {
+  if (raw == null || raw === "") return null;
+  const v = String(raw).trim();
+  if (!mongoose.Types.ObjectId.isValid(v)) return null;
+  return new mongoose.Types.ObjectId(v);
+}
+
+async function loadVendorMapFromProducts(products) {
+  const vendorIds = Array.from(
+    new Set(
+      products
+        .map((p) => p?.vendor)
+        .filter(Boolean)
+        .map((v) => v.toString()),
+    ),
+  );
+  if (!vendorIds.length) return new Map();
+  const vendorRows = await VendorProfile.find({ _id: { $in: vendorIds } })
+    .select("_id store_name store_logo ratings")
+    .lean();
+  return new Map(vendorRows.map((v) => [v._id.toString(), v]));
+}
+
+function attachVendors(products, vendorMap) {
+  return products.map((p) => {
+    const vendorId = p?.vendor ? p.vendor.toString() : null;
+    const vendor = vendorId ? vendorMap.get(vendorId) || { _id: vendorId } : null;
+    return { ...p, vendor };
+  });
+}
+
+async function variantPriceStatsForProducts(productIds) {
+  if (!productIds.length) return new Map();
+  const rows = await ProductVariant.aggregate([
+    {
+      $match: {
+        product: { $in: productIds },
+        isActive: true,
+      },
+    },
+    { $sort: { "price.sellingPrice": 1 } },
+    {
+      $group: {
+        _id: "$product",
+        minPrice: { $min: "$price.sellingPrice" },
+        maxPrice: { $max: "$price.sellingPrice" },
+        firstImages: { $first: "$images" },
+      },
+    },
+  ]);
+  return new Map(rows.map((r) => [r._id.toString(), r]));
+}
+
+async function attachPriceRangeToProducts(products) {
+  const ids = products.map((p) => p._id);
+  const stats = await variantPriceStatsForProducts(ids);
+  return products.map((p) => {
+    const st = stats.get(p._id.toString());
+    return {
+      ...p,
+      priceRange: st
+        ? { minPrice: st.minPrice, maxPrice: st.maxPrice }
+        : null,
+    };
+  });
+}
+
+function listingImageFieldsFromStats(st) {
+  const imgs = st?.firstImages || [];
+  const urls = imgs.map((i) => i?.url).filter(Boolean);
+  return {
+    image: urls[0] || undefined,
+    images: urls.length ? urls : undefined,
+  };
+}
 
 export const createProduct = async (req, res) => {
   try {
-    // Validate request body
     const parsed = createProductZod.safeParse({ body: req.body });
     if (!parsed.success) {
       return res.status(400).json({
@@ -25,7 +122,6 @@ export const createProduct = async (req, res) => {
         errors: parsed.error.errors,
       });
     }
-    // console.log("Whats worng", req.user);
 
     if (!req.user?.vendorId) {
       return res.status(401).json({ message: "Vendor not authenticated" });
@@ -33,7 +129,6 @@ export const createProduct = async (req, res) => {
 
     const { title, description, category, brand, tags, seo } = parsed.data.body;
 
-    // Validate category exists and is active
     const categoryExists = await Category.findOne({
       _id: category,
       isActive: true,
@@ -43,7 +138,6 @@ export const createProduct = async (req, res) => {
       return res.status(400).json({ message: "Invalid or inactive category" });
     }
 
-    // Generate SEO slug
     const baseSlug = slugify(title, { lower: true, strict: true });
     const slug = `${baseSlug}-${Date.now()}`;
 
@@ -61,7 +155,6 @@ export const createProduct = async (req, res) => {
       },
     });
 
-    // Publish product created event
     await publishProductCreated(product);
 
     return res.status(201).json({
@@ -103,18 +196,33 @@ export const getVendorProduct = async (req, res) => {
       vendor: vendorId,
     })
       .populate("category", "name slug path")
-      // .populate("vendor", "store_name store_logo")
+      .populate("vendor", VENDOR_POPULATE_SELECT)
       .lean();
 
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    const variants = await ProductVariant.find({
+    const variantsRaw = await ProductVariant.find({
       product: productId,
     })
       .sort({ createdAt: 1 })
       .lean();
+
+    const variantIds = variantsRaw.map((v) => v._id);
+    const inventories = await Inventory.find({
+      variant: { $in: variantIds },
+    }).lean();
+    const inventoryMap = Object.fromEntries(
+      inventories.map((inv) => [inv.variant.toString(), inv]),
+    );
+
+    const variants = variantsRaw.map((v) =>
+      normalizeVariantDoc({
+        ...v,
+        inventory: inventoryMap[v._id.toString()] || null,
+      }),
+    );
 
     res.status(200).json({
       product: {
@@ -125,6 +233,65 @@ export const getVendorProduct = async (req, res) => {
   } catch (err) {
     res.status(500).json({
       message: "Failed to fetch product",
+      error: err.message,
+    });
+  }
+};
+
+export const listVendorProducts = async (req, res) => {
+  try {
+    const vendorId = req.user?.vendorId;
+    if (!vendorId) {
+      return res.status(401).json({ message: "Vendor not authenticated" });
+    }
+
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const skip = (page - 1) * limit;
+
+    const filter = { vendor: vendorId };
+    if (req.query.isActive === "true") filter.isActive = true;
+    if (req.query.isActive === "false") filter.isActive = false;
+
+    const [products, total] = await Promise.all([
+      Product.find(filter)
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate("category", "name slug path")
+        .populate("vendor", VENDOR_POPULATE_SELECT)
+        .lean(),
+      Product.countDocuments(filter),
+    ]);
+
+    const ids = products.map((p) => p._id);
+    const statsMap = await variantPriceStatsForProducts(ids);
+
+    const withPricesAndImages = products.map((p) => {
+      const st = statsMap.get(p._id.toString());
+      const { image, images } = listingImageFieldsFromStats(st);
+      return {
+        ...p,
+        priceRange: st
+          ? { minPrice: st.minPrice, maxPrice: st.maxPrice }
+          : null,
+        ...(image ? { image } : {}),
+        ...(images ? { images } : {}),
+      };
+    });
+
+    res.status(200).json({
+      data: withPricesAndImages,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Failed to list vendor products",
       error: err.message,
     });
   }
@@ -150,7 +317,6 @@ export const updateProduct = async (req, res) => {
       return res.status(401).json({ message: "Vendor not authenticated" });
     }
 
-    // Validate category if being updated
     if (parsed.data.body.category) {
       const categoryExists = await Category.findOne({
         _id: parsed.data.body.category,
@@ -163,14 +329,12 @@ export const updateProduct = async (req, res) => {
       }
     }
 
-    // Note: Products don't have images directly, only variants do
     const updates = { ...parsed.data.body };
 
-    // Update slug if title is being updated
     if (updates.title) {
       const baseSlug = slugify(updates.title, { lower: true, strict: true });
       updates["seo.slug"] = `${baseSlug}-${Date.now()}`;
-      delete updates.title; // Remove from updates, we'll set it separately
+      delete updates.title;
     }
 
     const product = await Product.findOneAndUpdate(
@@ -186,13 +350,11 @@ export const updateProduct = async (req, res) => {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    // Update title separately if needed
     if (parsed.data.body.title) {
       product.title = parsed.data.body.title;
       await product.save();
     }
 
-    // Publish product updated event
     await publishProductUpdated(product);
 
     res.status(200).json({
@@ -242,7 +404,6 @@ export const deleteProduct = async (req, res) => {
         return res.status(404).json({ message: "Product not found" });
       }
 
-      // Soft delete all variants
       await ProductVariant.updateMany(
         { product: productId },
         { isActive: false },
@@ -251,7 +412,6 @@ export const deleteProduct = async (req, res) => {
 
       await session.commitTransaction();
 
-      // Publish product deleted event
       await publishProductDeleted(productId);
 
       res.status(200).json({
@@ -288,23 +448,27 @@ export const getPublicProductById = async (req, res) => {
       isActive: true,
     })
       .populate("category", "name slug path")
-      // .populate("vendor", "store_name store_logo")
       .lean();
+    const vendorMap = await loadVendorMapFromProducts([product]);
+    const withVendor = attachVendors([product], vendorMap)[0];
+
 
     if (!product) {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    const variants = await ProductVariant.find({
+    const variantsRaw = await ProductVariant.find({
       product: productId,
       isActive: true,
     })
       .sort({ "price.sellingPrice": 1 })
       .lean();
 
+    const variants = variantsRaw.map((v) => normalizeVariantDoc(v));
+
     res.status(200).json({
       product: {
-        ...product,
+        ...withVendor,
         variants,
       },
     });
@@ -318,57 +482,90 @@ export const getPublicProductById = async (req, res) => {
 
 export const getPublicProducts = async (req, res) => {
   try {
-    // Pagination
-    const page = Math.max(parseInt(req.query.page) || 1, 1);
-    const limit = Math.min(parseInt(req.query.limit) || 12, 50);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 12, 50);
     const skip = (page - 1) * limit;
 
-    // Build query
     const query = { isActive: true };
-    if (req.query.category) {
-      query.category = req.query.category;
-    }
+    const cat = parseCategoryFilter(req.query.category);
+    if (cat) query.category = cat;
     if (req.query.search) {
       query.$text = { $search: req.query.search };
     }
+    const vendorId = parseObjectId(req.query.vendor);
+    if (vendorId) {
+      query.vendor = vendorId;
+    }
 
-    const products = await Product.find(query)
-      .populate("category", "name slug")
-      // .populate("vendor", "store_name store_logo")
+    const minRating = parseNum(req.query, "minRating");
+    if (minRating != null) {
+      query.avgRating = { $gte: minRating };
+    }
+
+    const minPrice = parseNum(req.query, "minPrice");
+    const maxPrice = parseNum(req.query, "maxPrice");
+
+    const candidates = await Product.find(query)
+      .select("_id createdAt")
       .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
       .lean();
 
-    const productIds = products.map((p) => p._id);
-
-    // Get price ranges for products
-    const prices = await ProductVariant.aggregate([
-      {
-        $match: {
-          product: { $in: productIds },
-          isActive: true,
+    const candidateIds = candidates.map((p) => p._id);
+    
+    if (candidateIds.length === 0) {
+      return res.status(200).json({
+        data: [],
+        pagination: {
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
         },
-      },
-      {
-        $group: {
-          _id: "$product",
-          minPrice: { $min: "$price.sellingPrice" },
-          maxPrice: { $max: "$price.sellingPrice" },
-        },
-      },
-    ]);
+      });
+    }
 
-    const priceMap = Object.fromEntries(
-      prices.map((p) => [p._id.toString(), p]),
-    );
 
-    const result = products.map((p) => ({
-      ...p,
-      priceRange: priceMap[p._id.toString()] || null,
-    }));
+    const statsMap = await variantPriceStatsForProducts(candidateIds);
 
-    const total = await Product.countDocuments(query);
+    const filteredIds = candidateIds.filter((id) => {
+      const st = statsMap.get(id.toString());
+      const sellMin = st?.minPrice;
+      if (sellMin == null) {
+        if (minPrice != null || maxPrice != null) return false;
+        return true;
+      }
+      if (minPrice != null && sellMin < minPrice) return false;
+      if (maxPrice != null && sellMin > maxPrice) return false;
+      return true;
+    });
+
+    const total = filteredIds.length;
+    const pagedIds = filteredIds.slice(skip, skip + limit);
+
+    const products = await Product.find({ _id: { $in: pagedIds } })
+      .populate("category", "name slug")
+      .lean();
+
+    const byId = Object.fromEntries(products.map((p) => [p._id.toString(), p]));
+    const ordered = pagedIds
+      .map((id) => byId[id.toString()])
+      .filter(Boolean);
+
+    const vendorMap = await loadVendorMapFromProducts(ordered);
+    const withVendors = attachVendors(ordered, vendorMap);
+
+    const result = withVendors.map((p) => {
+      const st = statsMap.get(p._id.toString());
+      const { image, images } = listingImageFieldsFromStats(st);
+      return {
+        ...p,
+        priceRange: st
+          ? { minPrice: st.minPrice, maxPrice: st.maxPrice }
+          : null,
+        ...(image ? { image } : {}),
+        ...(images ? { images } : {}),
+      };
+    });
 
     res.status(200).json({
       data: result,
@@ -376,7 +573,7 @@ export const getPublicProducts = async (req, res) => {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        totalPages: total === 0 ? 0 : Math.ceil(total / limit),
       },
     });
   } catch (err) {

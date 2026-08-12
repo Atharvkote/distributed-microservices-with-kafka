@@ -6,6 +6,11 @@ import {
   handleVendorDeletion,
   handleVendorUpdation,
 } from "./handlers/auth.handler.js";
+import {
+  handleOrderCreated,
+  handleOrderStatusUpdated,
+  noopCatalogOrderTopic,
+} from "./handlers/order.handler.js";
 
 export const eventRegistry = {
   "auth": {
@@ -20,9 +25,19 @@ export const eventRegistry = {
     VP_DELETED: handleVendorDeletion,
   },
 
-  //   "order": {
-  //     ORDER_CREATED: handleOrderCreated,
-  //   },
+  /**
+   * Topic "order" carries catalog sync (PRODUCT_*, VARIANT_*) and order lifecycle (ORDER_*).
+   */
+  order: {
+    ORDER_CREATED: handleOrderCreated,
+    ORDER_STATUS_UPDATED: handleOrderStatusUpdated,
+    PRODUCT_CREATED: noopCatalogOrderTopic,
+    PRODUCT_UPDATED: noopCatalogOrderTopic,
+    PRODUCT_DELETED: noopCatalogOrderTopic,
+    VARIANT_CREATED: noopCatalogOrderTopic,
+    VARIANT_UPDATED: noopCatalogOrderTopic,
+    VARIANT_DELETED: noopCatalogOrderTopic,
+  },
 
   //   "payment": {
   //     PAYMENT_SUCCESS: handlePaymentSuccess,

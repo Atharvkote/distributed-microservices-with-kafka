@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/authStore';
+import { getPostAuthRedirectPath } from '@/lib/profile-utils';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { UserPlus, Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -18,7 +19,7 @@ function passwordStrengthMessage(password: string): string | null {
 
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
-  const { register, isLoading, isAuthenticated, authReady, user } = useAuthStore();
+  const { register, isLoading, isAuthenticated, authReady, user, profileCompleted } = useAuthStore();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -56,9 +57,12 @@ const RegisterPage: React.FC = () => {
   const isValid = Object.keys(errors).length === 0;
 
   if (authReady && isAuthenticated && user) {
-    if (user.role === 'vendor') return <Navigate to="/vendor/dashboard" replace />;
-    if (user.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
-    return <Navigate to="/" replace />;
+    return (
+      <Navigate
+        to={getPostAuthRedirectPath({ profileCompleted, role: user.role })}
+        replace
+      />
+    );
   }
 
   const handleSubmit = async (ev: React.FormEvent) => {
@@ -71,10 +75,13 @@ const RegisterPage: React.FC = () => {
         email: email.trim(),
         password,
       });
-      const role = useAuthStore.getState().user?.role;
-      if (role === 'vendor') navigate('/vendor/dashboard', { replace: true });
-      else if (role === 'admin') navigate('/admin/dashboard', { replace: true });
-      else navigate('/', { replace: true });
+      const s = useAuthStore.getState();
+      if (s.user) {
+        navigate(
+          getPostAuthRedirectPath({ profileCompleted: s.profileCompleted, role: s.user.role }),
+          { replace: true }
+        );
+      }
     } catch {
       /* toast in store */
     }
@@ -83,8 +90,8 @@ const RegisterPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold">Create an account</h2>
-        <p className="text-sm text-muted-foreground mt-2">Join NexaMarket in seconds</p>
+        <h2 className="text-2xl font-bold">Create An    <span className='carattere-regular text-primary text-4xl ml-3'> Account</span></h2>
+        <p className="text-sm text-muted-foreground mt-2">Join VenDeX in seconds</p>
       </div>
 
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
@@ -99,7 +106,7 @@ const RegisterPage: React.FC = () => {
               onChange={(e) => setName(e.target.value)}
               onBlur={() => setTouched((t) => ({ ...t, name: true }))}
               className={cn(
-                'pl-9 bg-accent/30 border-border/50 transition-colors',
+                'pl-9 py-6 bg-accent/30 border-primary/80 transition-colors',
                 showErrors.name && 'border-destructive/80 focus-visible:ring-destructive/30'
               )}
               placeholder="Jane Doe"
@@ -123,7 +130,7 @@ const RegisterPage: React.FC = () => {
               onChange={(e) => setEmail(e.target.value)}
               onBlur={() => setTouched((t) => ({ ...t, email: true }))}
               className={cn(
-                'pl-9 bg-accent/30 border-border/50 transition-colors',
+                'pl-9 py-6 bg-accent/30 border-primary/80 transition-colors',
                 showErrors.email && 'border-destructive/80 focus-visible:ring-destructive/30'
               )}
               placeholder="you@example.com"
@@ -147,7 +154,7 @@ const RegisterPage: React.FC = () => {
               onChange={(e) => setPassword(e.target.value)}
               onBlur={() => setTouched((t) => ({ ...t, password: true }))}
               className={cn(
-                'pl-9 pr-9 bg-accent/30 border-border/50 transition-colors',
+                'pl-9 pr-9 py-6 bg-accent/30 border-primary/80 transition-colors',
                 showErrors.password && 'border-destructive/80 focus-visible:ring-destructive/30'
               )}
               autoComplete="new-password"
@@ -179,9 +186,10 @@ const RegisterPage: React.FC = () => {
               onChange={(e) => setConfirmPassword(e.target.value)}
               onBlur={() => setTouched((t) => ({ ...t, confirmPassword: true }))}
               className={cn(
-                'pl-9 pr-9 bg-accent/30 border-border/50 transition-colors',
+                'pl-9 pr-9 py-6 bg-accent/30 border-primary/80 transition-colors',
                 showErrors.confirmPassword && 'border-destructive/80 focus-visible:ring-destructive/30'
               )}
+              placeholder="********"
               autoComplete="new-password"
               aria-invalid={showErrors.confirmPassword}
             />

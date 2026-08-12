@@ -1,6 +1,7 @@
 import { cloudinaryUpload } from "../utils/cloundnary.upload.js";
 import VendorProfile from "../models/vendor.model.js";
-import { email, z } from "zod";
+import UserModel from "../models/user.model.js";
+import { z } from "zod";
 import {
   bannerSchema,
   createVendorSchema,
@@ -46,7 +47,13 @@ export const createVendorProfile = async (req, res) => {
     };
     publishVendorProfileCreated(payload);
 
-    res.status(201).json(vendor);
+    const userDoc = await UserModel.findById(userId);
+    const token = userDoc ? await userDoc.generateToken() : null;
+
+    res.status(201).json({
+      vendor,
+      ...(token ? { token, accessToken: token } : {}),
+    });
   } catch (err) {
     res.status(400).json({ message: err.message });
   }

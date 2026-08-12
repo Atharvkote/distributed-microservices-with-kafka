@@ -290,9 +290,8 @@ app.get("/", (req, res) => {
 });
 
 app.use("/user", userAuthRouter);
-app.use("/api/auth", userAuthRouter);
 app.use("/vendor-profile", vendorProfileRouter);
-// app.use("/user-profile", userProfileRouter);
+app.use("/user-profile", userProfileRouter);
 
 app.get("/health", (req, res) => {
   res.status(200).send("OK");

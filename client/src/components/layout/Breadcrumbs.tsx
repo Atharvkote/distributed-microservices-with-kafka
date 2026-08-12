@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/breadcrumb';
 
 const routeLabels: Record<string, string> = {
+  'vendor-dashboard': 'Vendor',
   vendor: 'Vendor',
   admin: 'Admin',
   dashboard: 'Dashboard',

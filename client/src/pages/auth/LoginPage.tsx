@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuthStore } from '@/store/authStore';
+import { getPostAuthRedirectPath } from '@/lib/profile-utils';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { LogIn, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
@@ -12,22 +13,28 @@ const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const { login, isLoading, isAuthenticated, authReady, user } = useAuthStore();
+  const { login, isLoading, isAuthenticated, authReady, user, profileCompleted } = useAuthStore();
 
   if (authReady && isAuthenticated && user) {
-    if (user.role === 'vendor') return <Navigate to="/vendor/dashboard" replace />;
-    if (user.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
-    return <Navigate to="/" replace />;
+    return (
+      <Navigate
+        to={getPostAuthRedirectPath({ profileCompleted, role: user.role })}
+        replace
+      />
+    );
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await login(email, password);
-      const role = useAuthStore.getState().user?.role;
-      if (role === 'vendor') navigate('/vendor/dashboard', { replace: true });
-      else if (role === 'admin') navigate('/admin/dashboard', { replace: true });
-      else navigate('/', { replace: true });
+      const s = useAuthStore.getState();
+      if (s.user) {
+        navigate(
+          getPostAuthRedirectPath({ profileCompleted: s.profileCompleted, role: s.user.role }),
+          { replace: true }
+        );
+      }
     } catch {
       /* toast in store */
     }
@@ -35,12 +42,13 @@ const LoginPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+
       <div className="text-center">
-        <h2 className="text-2xl font-bold">Welcome back</h2>
+        <h2 className="text-2xl font-bold">WELCOME <span className='carattere-regular text-primary text-5xl'>back</span></h2>
         <p className="text-sm text-muted-foreground mt-2">Sign in to your VenDeX account</p>
       </div>
 
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4  max-w-md mx-auto">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <div className="relative">
@@ -50,7 +58,7 @@ const LoginPage: React.FC = () => {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="pl-9 bg-accent/30 border-border/50"
+              className="pl-9 py-6 bg-accent/30 border-primary/80"
               placeholder="you@example.com"
               autoComplete="email"
               required
@@ -67,7 +75,8 @@ const LoginPage: React.FC = () => {
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="pl-9 pr-9 bg-accent/30 border-border/50"
+              className="pl-9 pr-4 py-6 bg-accent/30 border-primary/80 "
+              placeholder="********"
               autoComplete="current-password"
               required
             />
@@ -100,8 +109,7 @@ const LoginPage: React.FC = () => {
       </form>
 
       <p className="text-center text-xs text-muted-foreground">
-        Use your identity-service account. Kong URL:{' '}
-        <code className="text-[10px] bg-accent/40 px-1 rounded">/auth/api/auth/login</code>
+        Using API gateways with stantdard ratelimits use attemps wisely.
       </p>
 
       <p className="text-center text-xs text-muted-foreground">

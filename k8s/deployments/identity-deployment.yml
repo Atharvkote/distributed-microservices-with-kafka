@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: identity-service
+  labels:
+    app: identity-service
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: identity-service
+  template:
+    metadata:
+      labels:
+        app: identity-service
+    spec:
+      containers:
+      - name: identity-service
+        image: atharvakote/identity-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3001
+        env:
+        - name: SERVER_PORT
+          value: "3001"
+        - name: KAFKA_CLIENT_ID
+          value: "identity-service-client"
+        - name: KAFKA_GROUP_ID
+          value: "identity-service-group"
+        - name: AWS_REGION
+          value: "us-east-1"
+        - name: AWS_S3_BUCKET
+          value: "vendex-product-images-bucket"
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: NODE_ENV
+        - name: SALT_ROUNDS
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: SALT_ROUNDS
+        - name: JWT_SECRET
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: JWT_SECRET
+        - name: JWT_EXPIRATION
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: JWT_EXPIRATION
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: REDIS_URL
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: REDIS_PORT
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: REDIS_HOST
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: KAFKA_BROKERS
+        - name: CLOUNDINARY_CLOUD_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: CLOUNDINARY_CLOUD_NAME
+        - name: CLOUNDINARY_API_KEY
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: CLOUNDINARY_API_KEY
+        - name: CLOUNDINARY_API_SECRET
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: CLOUNDINARY_API_SECRET
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: app-secret
+              key: MONGODB_URI_IDENTITY
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: app-secret
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secret
+              key: AWS_SECRET_ACCESS_KEY
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+          initialDelaySeconds: 15
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
